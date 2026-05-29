@@ -1,0 +1,396 @@
+/**
+ * @fileoverview Product-neutral runtime process discovery and termination helpers.
+ *
+ * Core owns the generic PID parsing, checkout-scoped process discovery, listener discovery, and
+ * TERM→wait→KILL escalation mechanics. Consumer adapters decide which patterns, ports, and
+ * workspace roots are safe to target.
+ *
+ * @testing Jest unit: cd packages/local-edge-core && npm run test -- src/runtime-stop.unit.test.ts
+ *
+ * @see packages/local-edge-core/src/runtime-stop.unit.test.ts - Jest regression module that pins PID-line parsing, checkout cwd scoping, lsof-backed probes, and SIGTERM-to-SIGKILL escalation for the helpers exported here.
+ * @see packages/local-edge-core/src/index.ts - Package entry barrel that re-exports this runtime-stop surface to other local-edge-core and kit modules.
+ * @see scripts/local-edge/runtime-stop-lib.sh - Shell-side companion stop helpers operators source alongside the pgrep/lsof semantics this TypeScript module implements for automation and manual runs.
+ *
+ * @documentation reviewed=2026-05-23 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
+ */
+
+import { spawnSync as nodeSpawnSync } from "node:child_process";
+
+const LOCAL_EDGE_CORE_RUNTIME_STOP_TERM_WAIT_ATTEMPTS = 12;
+const LOCAL_EDGE_CORE_RUNTIME_STOP_KILL_WAIT_ATTEMPTS = 4;
+const LOCAL_EDGE_CORE_RUNTIME_STOP_WAIT_SLEEP_MS = 250;
+const LOCAL_EDGE_CORE_RUNTIME_STOP_COMMAND_TIMEOUT_MS = 5000;
+
+/** Minimal command result shape used by runtime-stop host probes. */
+export type LocalEdgeCore_RuntimeStop_CommandResult = {
+  status: number | null;
+  stdout: Buffer | string | null;
+};
+
+/** Host command invocation mode for runtime-stop probes. */
+export type LocalEdgeCore_RuntimeStop_CommandMode = "ignore" | "pipe-stdout";
+
+/** Host command invocation request for runtime-stop probes. */
+export type LocalEdgeCore_RuntimeStop_CommandInvocation = {
+  command: string;
+  args: string[];
+  mode: LocalEdgeCore_RuntimeStop_CommandMode;
+  timeoutMs: number;
+};
+
+/** Injectable command runner used by tests and adapters that need custom process execution. */
+export type LocalEdgeCore_RuntimeStop_SpawnSync = (
+  invocation: LocalEdgeCore_RuntimeStop_CommandInvocation,
+) => LocalEdgeCore_RuntimeStop_CommandResult;
+
+/** Injectable process signal sender. */
+export type LocalEdgeCore_RuntimeStop_Kill = (
+  pid: number,
+  signal?: NodeJS.Signals | 0,
+) => void;
+
+/** Injectable process-aliveness probe. */
+export type LocalEdgeCore_RuntimeStop_PidIsAlive = (pid: number) => boolean;
+
+/** Injectable PID cwd resolver. */
+export type LocalEdgeCore_RuntimeStop_ResolvePidCwd = (pid: number) => string | null;
+
+/** Injectable wait loop for termination escalation. */
+export type LocalEdgeCore_RuntimeStop_WaitForPidsExit = (options: {
+  pids: number[];
+  attempts: number;
+}) => boolean;
+
+/** Minimal stderr-like writer used for diagnostics. */
+export type LocalEdgeCore_RuntimeStop_Writer = {
+  write(message: string): unknown;
+};
+
+/** Runs host commands with the stdio mode requested by the generic runtime-stop helper. */
+function LocalEdgeCore_runtimeStopDefaultSpawnSync(
+  invocation: LocalEdgeCore_RuntimeStop_CommandInvocation,
+): LocalEdgeCore_RuntimeStop_CommandResult {
+  if (invocation.mode === "pipe-stdout") {
+    return nodeSpawnSync(invocation.command, invocation.args, {
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: invocation.timeoutMs,
+    });
+  }
+
+  return nodeSpawnSync(invocation.command, invocation.args, {
+    stdio: "ignore",
+    timeout: invocation.timeoutMs,
+  });
+}
+
+/** Sends a signal to a process through Node's process API. */
+function LocalEdgeCore_runtimeStopDefaultKill(
+  pid: number,
+  signal?: NodeJS.Signals | 0,
+): void {
+  process.kill(pid, signal);
+}
+
+/** Returns the default runtime-stop diagnostic writer. */
+function LocalEdgeCore_runtimeStopDefaultWriter(): LocalEdgeCore_RuntimeStop_Writer {
+  return process.stderr;
+}
+
+/** Converts captured command stdout to text while preserving null as missing output. */
+function LocalEdgeCore_runtimeStopTextFromStdout(
+  stdout: Buffer | string | null,
+): string | null {
+  if (stdout === null) {
+    return null;
+  }
+  return typeof stdout === "string" ? stdout : stdout.toString("utf-8");
+}
+
+/** Sleeps for the legacy runtime-stop polling interval via the injected command runner. */
+function LocalEdgeCore_runtimeStopSleep(options: {
+  spawnSync: LocalEdgeCore_RuntimeStop_SpawnSync;
+}): void {
+  options.spawnSync({
+    command: "sleep",
+    args: [String(LOCAL_EDGE_CORE_RUNTIME_STOP_WAIT_SLEEP_MS / 1000)],
+    mode: "ignore",
+    timeoutMs: LOCAL_EDGE_CORE_RUNTIME_STOP_WAIT_SLEEP_MS + 500,
+  });
+}
+
+/** Parses newline-delimited PID output, preserving the legacy decimal-integer filter. */
+export function LocalEdgeCore_runtimeStopParsePidLines(output: string): number[] {
+  return output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^\d+$/.test(line))
+    .map((pid) => Number.parseInt(pid, 10));
+}
+
+/** Returns true when `cwd` is exactly `projectRoot` or under it. */
+export function LocalEdgeCore_runtimeStopPathIsWithinCheckout(options: {
+  cwd: string;
+  projectRoot: string;
+}): boolean {
+  return (
+    options.cwd === options.projectRoot ||
+    options.cwd.startsWith(`${options.projectRoot}/`)
+  );
+}
+
+/** Returns true when a process is still alive according to `kill(pid, 0)`. */
+export function LocalEdgeCore_runtimeStopPidIsAlive(options: {
+  pid: number;
+  kill?: LocalEdgeCore_RuntimeStop_Kill;
+  stderr?: LocalEdgeCore_RuntimeStop_Writer;
+}): boolean {
+  const kill = options.kill ?? LocalEdgeCore_runtimeStopDefaultKill;
+  const stderr = options.stderr ?? LocalEdgeCore_runtimeStopDefaultWriter();
+
+  try {
+    kill(options.pid, 0);
+    return true;
+  } catch (error) {
+    stderr.write(
+      `[runtime-stop] PID ${String(options.pid)} check error: ${String(error)}\n`,
+    );
+    return false;
+  }
+}
+
+/** Resolves the current working directory for `pid` using `lsof`. */
+export function LocalEdgeCore_runtimeStopResolvePidCwd(options: {
+  pid: number;
+  spawnSync?: LocalEdgeCore_RuntimeStop_SpawnSync;
+}): string | null {
+  const spawnSync = options.spawnSync ?? LocalEdgeCore_runtimeStopDefaultSpawnSync;
+  const result = spawnSync({
+    command: "lsof",
+    args: ["-a", "-p", String(options.pid), "-d", "cwd", "-Fn"],
+    mode: "pipe-stdout",
+    timeoutMs: LOCAL_EDGE_CORE_RUNTIME_STOP_COMMAND_TIMEOUT_MS,
+  });
+
+  if (result.status !== 0) {
+    return null;
+  }
+
+  const stdout = LocalEdgeCore_runtimeStopTextFromStdout(result.stdout);
+  if (stdout === null) {
+    return null;
+  }
+
+  const lines = stdout.split("\n");
+  for (const line of lines) {
+    if (line.startsWith("n")) {
+      return line.slice(1).trim();
+    }
+  }
+
+  return null;
+}
+
+/** Returns true when `pid` resolves to a cwd inside `projectRoot`. */
+export function LocalEdgeCore_runtimeStopPidHasCheckoutCwd(options: {
+  pid: number;
+  projectRoot: string;
+  resolvePidCwd?: LocalEdgeCore_RuntimeStop_ResolvePidCwd;
+}): boolean {
+  const resolvePidCwd =
+    options.resolvePidCwd ??
+    ((pid: number) => LocalEdgeCore_runtimeStopResolvePidCwd({ pid }));
+  const cwd = resolvePidCwd(options.pid);
+  if (cwd === null) {
+    return false;
+  }
+  return LocalEdgeCore_runtimeStopPathIsWithinCheckout({
+    cwd,
+    projectRoot: options.projectRoot,
+  });
+}
+
+/** Finds deduplicated `pgrep -f` PIDs whose cwd is inside `projectRoot`. */
+export function LocalEdgeCore_runtimeStopCollectCheckoutScopedPids(options: {
+  projectRoot: string;
+  patterns: string[];
+  spawnSync?: LocalEdgeCore_RuntimeStop_SpawnSync;
+  resolvePidCwd?: LocalEdgeCore_RuntimeStop_ResolvePidCwd;
+}): number[] {
+  const spawnSync = options.spawnSync ?? LocalEdgeCore_runtimeStopDefaultSpawnSync;
+  const resolvePidCwd =
+    options.resolvePidCwd ??
+    ((pid: number) => LocalEdgeCore_runtimeStopResolvePidCwd({ pid, spawnSync }));
+  const seen = new Set<number>();
+
+  for (const pattern of options.patterns) {
+    const result = spawnSync({
+      command: "pgrep",
+      args: ["-f", pattern],
+      mode: "pipe-stdout",
+      timeoutMs: LOCAL_EDGE_CORE_RUNTIME_STOP_COMMAND_TIMEOUT_MS,
+    });
+
+    if (result.status !== 0) {
+      continue;
+    }
+
+    const stdout = LocalEdgeCore_runtimeStopTextFromStdout(result.stdout);
+    if (stdout === null) {
+      continue;
+    }
+
+    for (const pid of LocalEdgeCore_runtimeStopParsePidLines(stdout)) {
+      if (seen.has(pid)) {
+        continue;
+      }
+      if (
+        LocalEdgeCore_runtimeStopPidHasCheckoutCwd({
+          pid,
+          projectRoot: options.projectRoot,
+          resolvePidCwd,
+        })
+      ) {
+        seen.add(pid);
+      }
+    }
+  }
+
+  return [...seen].sort((a, b) => a - b);
+}
+
+/** Waits until all PIDs exit or the attempt budget is exhausted. */
+export function LocalEdgeCore_runtimeStopWaitForPidsExit(options: {
+  pids: number[];
+  attempts?: number;
+  pidIsAlive?: LocalEdgeCore_RuntimeStop_PidIsAlive;
+  spawnSync?: LocalEdgeCore_RuntimeStop_SpawnSync;
+}): boolean {
+  const maxAttempts = options.attempts ?? LOCAL_EDGE_CORE_RUNTIME_STOP_TERM_WAIT_ATTEMPTS;
+  const pidIsAlive =
+    options.pidIsAlive ??
+    ((pid: number) => LocalEdgeCore_runtimeStopPidIsAlive({ pid }));
+  const spawnSync = options.spawnSync ?? LocalEdgeCore_runtimeStopDefaultSpawnSync;
+  let pending = options.pids.filter((pid) => pidIsAlive(pid));
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (pending.length === 0) {
+      return true;
+    }
+    LocalEdgeCore_runtimeStopSleep({ spawnSync });
+    pending = pending.filter((pid) => pidIsAlive(pid));
+  }
+
+  return pending.length === 0;
+}
+
+/** Terminates a PID list with SIGTERM, wait, SIGKILL, wait escalation. */
+export function LocalEdgeCore_runtimeStopTerminatePidList(options: {
+  pids: number[];
+  kill?: LocalEdgeCore_RuntimeStop_Kill;
+  pidIsAlive?: LocalEdgeCore_RuntimeStop_PidIsAlive;
+  stderr?: LocalEdgeCore_RuntimeStop_Writer;
+  waitForPidsExit?: LocalEdgeCore_RuntimeStop_WaitForPidsExit;
+}): void {
+  if (options.pids.length === 0) {
+    return;
+  }
+
+  const kill = options.kill ?? LocalEdgeCore_runtimeStopDefaultKill;
+  const stderr = options.stderr ?? LocalEdgeCore_runtimeStopDefaultWriter();
+  const pidIsAlive =
+    options.pidIsAlive ??
+    ((pid: number) => LocalEdgeCore_runtimeStopPidIsAlive({ pid, kill, stderr }));
+  const waitForPidsExit =
+    options.waitForPidsExit ??
+    ((waitOptions: { pids: number[]; attempts: number }) =>
+      LocalEdgeCore_runtimeStopWaitForPidsExit({
+        pids: waitOptions.pids,
+        attempts: waitOptions.attempts,
+        pidIsAlive,
+      }));
+  const unique = [...new Set(options.pids)];
+  const live = unique.filter((pid) => pidIsAlive(pid));
+
+  if (live.length === 0) {
+    stderr.write("[runtime-stop] No live PIDs to terminate\n");
+    return;
+  }
+
+  stderr.write(`[runtime-stop] Live PIDs: ${live.join(" ")}, sending TERM\n`);
+
+  for (const pid of live) {
+    try {
+      kill(pid, "SIGTERM");
+    } catch (error) {
+      stderr.write(
+        `[runtime-stop] SIGTERM error for PID ${String(pid)}: ${String(error)}\n`,
+      );
+    }
+  }
+
+  if (
+    waitForPidsExit({
+      pids: live,
+      attempts: LOCAL_EDGE_CORE_RUNTIME_STOP_TERM_WAIT_ATTEMPTS,
+    })
+  ) {
+    stderr.write("[runtime-stop] All PIDs terminated gracefully\n");
+    return;
+  }
+
+  const remaining = live.filter((pid) => pidIsAlive(pid));
+  if (remaining.length === 0) {
+    return;
+  }
+
+  stderr.write(
+    `[runtime-stop] Remaining PIDs after TERM: ${remaining.join(" ")}, sending KILL\n`,
+  );
+
+  for (const pid of remaining) {
+    try {
+      kill(pid, "SIGKILL");
+    } catch (error) {
+      stderr.write(
+        `[runtime-stop] SIGKILL error for PID ${String(pid)}: ${String(error)}\n`,
+      );
+    }
+  }
+
+  waitForPidsExit({
+    pids: remaining,
+    attempts: LOCAL_EDGE_CORE_RUNTIME_STOP_KILL_WAIT_ATTEMPTS,
+  });
+}
+
+/** Finds and terminates TCP listeners on `port`. */
+export function LocalEdgeCore_runtimeStopTerminateListenersOnPort(options: {
+  port: number;
+  spawnSync?: LocalEdgeCore_RuntimeStop_SpawnSync;
+  terminatePidList?: (pids: number[]) => void;
+}): void {
+  const spawnSync = options.spawnSync ?? LocalEdgeCore_runtimeStopDefaultSpawnSync;
+  const terminatePidList =
+    options.terminatePidList ??
+    ((pids: number[]) => LocalEdgeCore_runtimeStopTerminatePidList({ pids }));
+  const result = spawnSync({
+    command: "lsof",
+    args: [`-tiTCP:${String(options.port)}`, "-sTCP:LISTEN"],
+    mode: "pipe-stdout",
+    timeoutMs: LOCAL_EDGE_CORE_RUNTIME_STOP_COMMAND_TIMEOUT_MS,
+  });
+
+  if (result.status !== 0) {
+    return;
+  }
+
+  const stdout = LocalEdgeCore_runtimeStopTextFromStdout(result.stdout);
+  if (stdout === null) {
+    return;
+  }
+
+  const pids = LocalEdgeCore_runtimeStopParsePidLines(stdout);
+  if (pids.length > 0) {
+    terminatePidList(pids);
+  }
+}

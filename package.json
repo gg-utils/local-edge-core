@@ -1,0 +1,167 @@
+{
+  "name": "@gg-utils/local-edge-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agnostic local-edge core primitives for local HTTPS routing, manifests, and hostnames.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./cli": {
+      "types": "./src/cli.ts",
+      "default": "./src/cli.ts"
+    },
+    "./config-primitives": {
+      "types": "./src/config-primitives.ts",
+      "default": "./src/config-primitives.ts"
+    },
+    "./dns": {
+      "types": "./src/dns.ts",
+      "default": "./src/dns.ts"
+    },
+    "./doctor": {
+      "types": "./src/doctor.ts",
+      "default": "./src/doctor.ts"
+    },
+    "./docker-lifecycle": {
+      "types": "./src/docker-lifecycle.ts",
+      "default": "./src/docker-lifecycle.ts"
+    },
+    "./health": {
+      "types": "./src/healthcheck.ts",
+      "default": "./src/healthcheck.ts"
+    },
+    "./healthcheck": {
+      "types": "./src/healthcheck.ts",
+      "default": "./src/healthcheck.ts"
+    },
+    "./host-mutations": {
+      "types": "./src/host-mutations.ts",
+      "default": "./src/host-mutations.ts"
+    },
+    "./hostname": {
+      "types": "./src/hostname.ts",
+      "default": "./src/hostname.ts"
+    },
+    "./hostnames": {
+      "types": "./src/hostname.ts",
+      "default": "./src/hostname.ts"
+    },
+    "./log-output": {
+      "types": "./src/log-output.ts",
+      "default": "./src/log-output.ts"
+    },
+    "./logs": {
+      "types": "./src/logs.ts",
+      "default": "./src/logs.ts"
+    },
+    "./manifest": {
+      "types": "./src/manifest.ts",
+      "default": "./src/manifest.ts"
+    },
+    "./method-config": {
+      "types": "./src/method-config.ts",
+      "default": "./src/method-config.ts"
+    },
+    "./network": {
+      "types": "./src/network.ts",
+      "default": "./src/network.ts"
+    },
+    "./nginx": {
+      "types": "./src/nginx.ts",
+      "default": "./src/nginx.ts"
+    },
+    "./paths": {
+      "types": "./src/paths.ts",
+      "default": "./src/paths.ts"
+    },
+    "./prompt": {
+      "types": "./src/prompt.ts",
+      "default": "./src/prompt.ts"
+    },
+    "./registry": {
+      "types": "./src/registry.ts",
+      "default": "./src/registry.ts"
+    },
+    "./registry-json-store": {
+      "types": "./src/registry-json-store.ts",
+      "default": "./src/registry-json-store.ts"
+    },
+    "./route-plan": {
+      "types": "./src/route-plan.ts",
+      "default": "./src/route-plan.ts"
+    },
+    "./router/nginx-docker": {
+      "types": "./src/router/nginx-docker.ts",
+      "default": "./src/router/nginx-docker.ts"
+    },
+    "./runtime-stop": {
+      "types": "./src/runtime-stop.ts",
+      "default": "./src/runtime-stop.ts"
+    },
+    "./shell-shim": {
+      "types": "./src/shell-shim.ts",
+      "default": "./src/shell-shim.ts"
+    },
+    "./startup-cli": {
+      "types": "./src/startup-cli.ts",
+      "default": "./src/startup-cli.ts"
+    },
+    "./status": {
+      "types": "./src/status.ts",
+      "default": "./src/status.ts"
+    },
+    "./system": {
+      "types": "./src/system.ts",
+      "default": "./src/system.ts"
+    },
+    "./tls": {
+      "types": "./src/tls.ts",
+      "default": "./src/tls.ts"
+    },
+    "./url-matrix": {
+      "types": "./src/url-matrix.ts",
+      "default": "./src/url-matrix.ts"
+    },
+    "./validation": {
+      "types": "./src/validation.ts",
+      "default": "./src/validation.ts"
+    },
+    "./with-logs": {
+      "types": "./src/with-logs.ts",
+      "default": "./src/with-logs.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "local-edge": "./bin/local-edge.js"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "src/",
+    "!src/**/*.unit.test.ts",
+    "README.md",
+    "tsconfig.json",
+    "tsconfig.build.json"
+  ],
+  "engines": {
+    "node": ">=24.11.1 <25",
+    "npm": ">=9.0.0"
+  },
+  "packageManager": "npm@11.12.1",
+  "scripts": {
+    "build": "node ../../node_modules/typescript/bin/tsc -p tsconfig.build.json",
+    "type-check": "node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
+    "test": "node ../../node_modules/tsx/dist/cli.mjs --test \"src/**/*.unit.test.ts\"",
+    "lint": "cd ../.. && node node_modules/eslint/bin/eslint.js --config eslint.config.ts packages/local-edge-core/src packages/local-edge-core/bin",
+    "prepack": "npm run build",
+    "pack:dry-run": "npm pack --dry-run"
+  }
+}
