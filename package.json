@@ -1,167 +1,172 @@
 {
   "name": "@gg-utils/local-edge-core",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.0",
   "description": "Agnostic local-edge core primitives for local HTTPS routing, manifests, and hostnames.",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./cli": {
-      "types": "./src/cli.ts",
-      "default": "./src/cli.ts"
+      "types": "./dist/cli.d.ts",
+      "default": "./dist/cli.js"
     },
     "./config-primitives": {
-      "types": "./src/config-primitives.ts",
-      "default": "./src/config-primitives.ts"
+      "types": "./dist/config-primitives.d.ts",
+      "default": "./dist/config-primitives.js"
     },
     "./dns": {
-      "types": "./src/dns.ts",
-      "default": "./src/dns.ts"
+      "types": "./dist/dns.d.ts",
+      "default": "./dist/dns.js"
     },
     "./doctor": {
-      "types": "./src/doctor.ts",
-      "default": "./src/doctor.ts"
+      "types": "./dist/doctor.d.ts",
+      "default": "./dist/doctor.js"
     },
     "./docker-lifecycle": {
-      "types": "./src/docker-lifecycle.ts",
-      "default": "./src/docker-lifecycle.ts"
+      "types": "./dist/docker-lifecycle.d.ts",
+      "default": "./dist/docker-lifecycle.js"
     },
     "./health": {
-      "types": "./src/healthcheck.ts",
-      "default": "./src/healthcheck.ts"
+      "types": "./dist/healthcheck.d.ts",
+      "default": "./dist/healthcheck.js"
     },
     "./healthcheck": {
-      "types": "./src/healthcheck.ts",
-      "default": "./src/healthcheck.ts"
+      "types": "./dist/healthcheck.d.ts",
+      "default": "./dist/healthcheck.js"
     },
     "./host-mutations": {
-      "types": "./src/host-mutations.ts",
-      "default": "./src/host-mutations.ts"
+      "types": "./dist/host-mutations.d.ts",
+      "default": "./dist/host-mutations.js"
     },
     "./hostname": {
-      "types": "./src/hostname.ts",
-      "default": "./src/hostname.ts"
+      "types": "./dist/hostname.d.ts",
+      "default": "./dist/hostname.js"
     },
     "./hostnames": {
-      "types": "./src/hostname.ts",
-      "default": "./src/hostname.ts"
+      "types": "./dist/hostname.d.ts",
+      "default": "./dist/hostname.js"
     },
     "./log-output": {
-      "types": "./src/log-output.ts",
-      "default": "./src/log-output.ts"
+      "types": "./dist/log-output.d.ts",
+      "default": "./dist/log-output.js"
     },
     "./logs": {
-      "types": "./src/logs.ts",
-      "default": "./src/logs.ts"
+      "types": "./dist/logs.d.ts",
+      "default": "./dist/logs.js"
     },
     "./manifest": {
-      "types": "./src/manifest.ts",
-      "default": "./src/manifest.ts"
+      "types": "./dist/manifest.d.ts",
+      "default": "./dist/manifest.js"
     },
     "./method-config": {
-      "types": "./src/method-config.ts",
-      "default": "./src/method-config.ts"
+      "types": "./dist/method-config.d.ts",
+      "default": "./dist/method-config.js"
     },
     "./network": {
-      "types": "./src/network.ts",
-      "default": "./src/network.ts"
+      "types": "./dist/network.d.ts",
+      "default": "./dist/network.js"
     },
     "./nginx": {
-      "types": "./src/nginx.ts",
-      "default": "./src/nginx.ts"
+      "types": "./dist/nginx.d.ts",
+      "default": "./dist/nginx.js"
     },
     "./paths": {
-      "types": "./src/paths.ts",
-      "default": "./src/paths.ts"
+      "types": "./dist/paths.d.ts",
+      "default": "./dist/paths.js"
     },
     "./prompt": {
-      "types": "./src/prompt.ts",
-      "default": "./src/prompt.ts"
+      "types": "./dist/prompt.d.ts",
+      "default": "./dist/prompt.js"
     },
     "./registry": {
-      "types": "./src/registry.ts",
-      "default": "./src/registry.ts"
+      "types": "./dist/registry.d.ts",
+      "default": "./dist/registry.js"
     },
     "./registry-json-store": {
-      "types": "./src/registry-json-store.ts",
-      "default": "./src/registry-json-store.ts"
+      "types": "./dist/registry-json-store.d.ts",
+      "default": "./dist/registry-json-store.js"
     },
     "./route-plan": {
-      "types": "./src/route-plan.ts",
-      "default": "./src/route-plan.ts"
+      "types": "./dist/route-plan.d.ts",
+      "default": "./dist/route-plan.js"
     },
     "./router/nginx-docker": {
-      "types": "./src/router/nginx-docker.ts",
-      "default": "./src/router/nginx-docker.ts"
+      "types": "./dist/router/nginx-docker.d.ts",
+      "default": "./dist/router/nginx-docker.js"
     },
     "./runtime-stop": {
-      "types": "./src/runtime-stop.ts",
-      "default": "./src/runtime-stop.ts"
+      "types": "./dist/runtime-stop.d.ts",
+      "default": "./dist/runtime-stop.js"
     },
     "./shell-shim": {
-      "types": "./src/shell-shim.ts",
-      "default": "./src/shell-shim.ts"
+      "types": "./dist/shell-shim.d.ts",
+      "default": "./dist/shell-shim.js"
     },
     "./startup-cli": {
-      "types": "./src/startup-cli.ts",
-      "default": "./src/startup-cli.ts"
+      "types": "./dist/startup-cli.d.ts",
+      "default": "./dist/startup-cli.js"
     },
     "./status": {
-      "types": "./src/status.ts",
-      "default": "./src/status.ts"
+      "types": "./dist/status.d.ts",
+      "default": "./dist/status.js"
     },
     "./system": {
-      "types": "./src/system.ts",
-      "default": "./src/system.ts"
+      "types": "./dist/system.d.ts",
+      "default": "./dist/system.js"
     },
     "./tls": {
-      "types": "./src/tls.ts",
-      "default": "./src/tls.ts"
+      "types": "./dist/tls.d.ts",
+      "default": "./dist/tls.js"
     },
     "./url-matrix": {
-      "types": "./src/url-matrix.ts",
-      "default": "./src/url-matrix.ts"
+      "types": "./dist/url-matrix.d.ts",
+      "default": "./dist/url-matrix.js"
     },
     "./validation": {
-      "types": "./src/validation.ts",
-      "default": "./src/validation.ts"
+      "types": "./dist/validation.d.ts",
+      "default": "./dist/validation.js"
     },
     "./with-logs": {
-      "types": "./src/with-logs.ts",
-      "default": "./src/with-logs.ts"
+      "types": "./dist/with-logs.d.ts",
+      "default": "./dist/with-logs.js"
     },
     "./package.json": "./package.json"
   },
   "bin": {
-    "local-edge": "./bin/local-edge.js"
+    "local-edge": "./dist/bin/local-edge.js"
   },
   "files": [
-    "bin/",
     "dist/",
-    "src/",
-    "!src/**/*.unit.test.ts",
     "README.md",
-    "tsconfig.json",
-    "tsconfig.build.json"
+    "LICENSE"
   ],
   "engines": {
-    "node": ">=24.11.1 <25",
+    "node": ">=22.0.0 <27",
     "npm": ">=9.0.0"
   },
   "packageManager": "npm@11.12.1",
   "scripts": {
-    "build": "node ../../node_modules/typescript/bin/tsc -p tsconfig.build.json",
-    "type-check": "node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
-    "test": "node ../../node_modules/tsx/dist/cli.mjs --test \"src/**/*.unit.test.ts\"",
-    "lint": "cd ../.. && node node_modules/eslint/bin/eslint.js --config eslint.config.ts packages/local-edge-core/src packages/local-edge-core/bin",
-    "prepack": "npm run build",
-    "pack:dry-run": "npm pack --dry-run"
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test \"src/**/*.unit.test.ts\"",
+    "lint": "eslint --max-warnings 0 .",
+    "check:dist": "node scripts/check-dist.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gg-utils/local-edge-core.git"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "eslint": "9.39.5",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.2"
   }
 }

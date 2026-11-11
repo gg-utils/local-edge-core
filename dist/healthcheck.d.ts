@@ -150,4 +150,3 @@ export declare function LocalEdgeCore_tickHealthFingerprintStability(options: {
 export declare function LocalEdgeCore_shouldLogHealthSummary(options: LocalEdgeCore_ShouldLogHealthSummaryOptions): boolean;
 /** Checks whether strict watch mode exhausted its wait budget with remaining failures. */
 export declare function LocalEdgeCore_shouldFailStrictHealthWatch(options: LocalEdgeCore_ShouldFailStrictHealthWatchOptions): boolean;
-//# sourceMappingURL=healthcheck.d.ts.map

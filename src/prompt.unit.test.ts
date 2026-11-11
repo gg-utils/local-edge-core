@@ -42,7 +42,7 @@ function createPromptDependencies(options: {
       /** Records the full prompt and returns the next queued answer. */
       async askQuestion(prompt: string): Promise<string> {
         prompts.push(prompt);
-        return answers.shift() ?? "";
+        return await Promise.resolve(answers.shift() ?? "");
       },
     },
     prompts,
@@ -84,7 +84,7 @@ function createHomebrewDependencies(options: {
   };
 }
 
-test("LocalEdgeCore_yesNo returns the default answer in non-interactive mode", async () => {
+void test("LocalEdgeCore_yesNo returns the default answer in non-interactive mode", async () => {
   assert.equal(
     await LocalEdgeCore_yesNo({
       prompt: "Continue?",
@@ -104,7 +104,7 @@ test("LocalEdgeCore_yesNo returns the default answer in non-interactive mode", a
   );
 });
 
-test("LocalEdgeCore_yesNo formats hints and parses accepted answers", async () => {
+void test("LocalEdgeCore_yesNo formats hints and parses accepted answers", async () => {
   const { dependencies, prompts } = createPromptDependencies({
     stdinIsTty: true,
     answers: [" yes "],
@@ -121,7 +121,7 @@ test("LocalEdgeCore_yesNo formats hints and parses accepted answers", async () =
   assert.deepEqual(prompts, ["Continue? [y/N] "]);
 });
 
-test("LocalEdgeCore_yesNo uses the default answer for blank interactive input", async () => {
+void test("LocalEdgeCore_yesNo uses the default answer for blank interactive input", async () => {
   const { dependencies } = createPromptDependencies({
     stdinIsTty: true,
     answers: [""],
@@ -137,7 +137,7 @@ test("LocalEdgeCore_yesNo uses the default answer for blank interactive input", 
   );
 });
 
-test("LocalEdgeCore_installHomebrewFormula skips install when the prompt is rejected", async () => {
+void test("LocalEdgeCore_installHomebrewFormula skips install when the prompt is rejected", async () => {
   const { dependencies, commands, prompts } = createHomebrewDependencies({
     stdinIsTty: true,
     answers: ["n"],
@@ -155,7 +155,7 @@ test("LocalEdgeCore_installHomebrewFormula skips install when the prompt is reje
   assert.deepEqual(commands, []);
 });
 
-test("LocalEdgeCore_installHomebrewFormula returns true when brew install succeeds", async () => {
+void test("LocalEdgeCore_installHomebrewFormula returns true when brew install succeeds", async () => {
   const { dependencies, commands } = createHomebrewDependencies({
     stdinIsTty: true,
     answers: ["y"],
@@ -179,7 +179,7 @@ test("LocalEdgeCore_installHomebrewFormula returns true when brew install succee
   ]);
 });
 
-test("LocalEdgeCore_installHomebrewFormula returns false when brew install fails", async () => {
+void test("LocalEdgeCore_installHomebrewFormula returns false when brew install fails", async () => {
   const { dependencies } = createHomebrewDependencies({
     stdinIsTty: true,
     answers: ["y"],

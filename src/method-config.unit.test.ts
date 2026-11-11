@@ -44,7 +44,7 @@ import {
 
 const supportedMethods = ["nginx-docker"] as const;
 
-test("LocalEdgeCore method config resolves generated dirs and slugs", () => {
+void test("LocalEdgeCore method config resolves generated dirs and slugs", () => {
   assert.equal(
     LocalEdgeCore_resolveGeneratedDirBase({
       projectRoot: "/tmp/example",
@@ -71,7 +71,7 @@ test("LocalEdgeCore method config resolves generated dirs and slugs", () => {
   assert.equal(LocalEdgeCore_slugifySegment("!!!"), "default");
 });
 
-test("LocalEdgeCore method config resolves developer, env, and compose project names", () => {
+void test("LocalEdgeCore method config resolves developer, env, and compose project names", () => {
   assert.equal(
     LocalEdgeCore_resolveDeveloperSlug({
       configuredDeveloperSlug: undefined,
@@ -121,7 +121,7 @@ test("LocalEdgeCore method config resolves developer, env, and compose project n
   );
 });
 
-test("LocalEdgeCore method config resolves nginx-docker env names, utilities, and split-DNS IP", () => {
+void test("LocalEdgeCore method config resolves nginx-docker env names, utilities, and split-DNS IP", () => {
   assert.equal(
     LocalEdgeCore_nginxDockerPortEnvName(),
     "LOCAL_EDGE_NGINX_DOCKER_PORT",
@@ -149,7 +149,7 @@ test("LocalEdgeCore method config resolves nginx-docker env names, utilities, an
   );
 });
 
-test("LocalEdgeCore method config resolves configured methods with legacy parity", () => {
+void test("LocalEdgeCore method config resolves configured methods with legacy parity", () => {
   assert.equal(
     LocalEdgeCore_isSupportedMethod({
       method: "nginx-docker",
@@ -196,7 +196,7 @@ test("LocalEdgeCore method config resolves configured methods with legacy parity
   );
 });
 
-test("LocalEdgeCore method config resolves primary methods against configured methods", () => {
+void test("LocalEdgeCore method config resolves primary methods against configured methods", () => {
   const configuredMethods = LocalEdgeCore_resolveConfiguredMethods({
     rawMethodsCsv: "nginx-docker",
     supportedMethods,
@@ -250,7 +250,7 @@ test("LocalEdgeCore method config resolves primary methods against configured me
   );
 });
 
-test("LocalEdgeCore method config resolves nginx-docker host and port overrides", () => {
+void test("LocalEdgeCore method config resolves nginx-docker host and port overrides", () => {
   assert.equal(
     LocalEdgeCore_resolveNginxDockerPort({
       rawPort: undefined,
@@ -281,7 +281,7 @@ test("LocalEdgeCore method config resolves nginx-docker host and port overrides"
   );
 });
 
-test("LocalEdgeCore method config resolves nginx-docker artifact paths", () => {
+void test("LocalEdgeCore method config resolves nginx-docker artifact paths", () => {
   const generatedDir = path.join("/tmp", "example", ".tmp", "local-edge");
   const composePath = path.join(
     generatedDir,
@@ -337,7 +337,7 @@ test("LocalEdgeCore method config resolves nginx-docker artifact paths", () => {
   );
 });
 
-test("LocalEdgeCore method config resolves nginx-docker start and stop commands", () => {
+void test("LocalEdgeCore method config resolves nginx-docker start and stop commands", () => {
   const projectName = "local-edge-nginx-docker-dev-main";
   const composePath = path.join(
     "/tmp",
@@ -383,7 +383,7 @@ test("LocalEdgeCore method config resolves nginx-docker start and stop commands"
   );
 });
 
-test("LocalEdgeCore method config validates requested method tokens", () => {
+void test("LocalEdgeCore method config validates requested method tokens", () => {
   assert.equal(
     LocalEdgeCore_validateRequestedMethod({
       allowAll: true,

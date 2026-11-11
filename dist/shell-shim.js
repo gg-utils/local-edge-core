@@ -198,4 +198,3 @@ export function LocalEdgeCore_parseShellShimArgv(argv) {
     }
     throw new LocalEdgeCoreShellShimError(`Unknown command: ${command}`);
 }
-//# sourceMappingURL=shell-shim.js.map

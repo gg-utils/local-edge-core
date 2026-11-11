@@ -30,7 +30,7 @@ import {
   LocalEdgeCore_renderNginxServerBlock,
 } from "./nginx.js";
 
-test("LocalEdgeCore_renderNginxProxyPassDirective renders variable proxy target", () => {
+void test("LocalEdgeCore_renderNginxProxyPassDirective renders variable proxy target", () => {
   assert.equal(
     LocalEdgeCore_renderNginxProxyPassDirective({
       upstreamHost: "host.docker.internal",
@@ -42,7 +42,7 @@ test("LocalEdgeCore_renderNginxProxyPassDirective renders variable proxy target"
   );
 });
 
-test("LocalEdgeCore_renderNginxServerBlock renders websocket-safe proxy block", () => {
+void test("LocalEdgeCore_renderNginxServerBlock renders websocket-safe proxy block", () => {
   const block = LocalEdgeCore_renderNginxServerBlock({
     method: "nginx-docker",
     listenHost: "0.0.0.0",
@@ -68,7 +68,7 @@ test("LocalEdgeCore_renderNginxServerBlock renders websocket-safe proxy block", 
   assert.match(block, /return 204 "local-edge-router-ok\\n";/);
 });
 
-test("LocalEdgeCore_renderNginxServerBlock omits websocket directives for plain proxy", () => {
+void test("LocalEdgeCore_renderNginxServerBlock omits websocket directives for plain proxy", () => {
   const block = LocalEdgeCore_renderNginxServerBlock({
     method: "nginx-docker",
     listenHost: "0.0.0.0",
@@ -94,7 +94,7 @@ test("LocalEdgeCore_renderNginxServerBlock omits websocket directives for plain 
   );
 });
 
-test("LocalEdgeCore_renderNginxHttpConfig wraps adapter server blocks", () => {
+void test("LocalEdgeCore_renderNginxHttpConfig wraps adapter server blocks", () => {
   const config = LocalEdgeCore_renderNginxHttpConfig({
     generatedBy: "demo-renderer.ts",
     mimeTypesPath: "/etc/nginx/mime.types",
@@ -127,7 +127,7 @@ test("LocalEdgeCore_renderNginxHttpConfig wraps adapter server blocks", () => {
   assert.match(config, /server_name www\.demo\.test;/);
 });
 
-test("LocalEdgeCore_renderNginxDockerCompose renders generic service wiring", () => {
+void test("LocalEdgeCore_renderNginxDockerCompose renders generic service wiring", () => {
   const compose = LocalEdgeCore_renderNginxDockerCompose({
     projectName: "local-edge-demo",
     serviceName: "local-edge-nginx-docker",

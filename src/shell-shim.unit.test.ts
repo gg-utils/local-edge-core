@@ -25,7 +25,7 @@ import {
   LocalEdgeCore_renderShellShimUsage,
 } from "./shell-shim.js";
 
-test("LocalEdgeCore_parseShellShimArgv parses help and zero-arg commands", () => {
+void test("LocalEdgeCore_parseShellShimArgv parses help and zero-arg commands", () => {
   assert.deepEqual(LocalEdgeCore_parseShellShimArgv([]), { command: "help" });
   assert.deepEqual(LocalEdgeCore_parseShellShimArgv(["--help"]), { command: "help" });
   assert.deepEqual(LocalEdgeCore_parseShellShimArgv(["resolve-formatter-state"]), {
@@ -33,7 +33,7 @@ test("LocalEdgeCore_parseShellShimArgv parses help and zero-arg commands", () =>
   });
 });
 
-test("LocalEdgeCore_parseShellShimArgv parses path and value commands", () => {
+void test("LocalEdgeCore_parseShellShimArgv parses path and value commands", () => {
   assert.deepEqual(
     LocalEdgeCore_parseShellShimArgv(["print-prelude", "--log-file", "/tmp/run.log"]),
     { command: "print-prelude", logFile: "/tmp/run.log" },
@@ -56,7 +56,7 @@ test("LocalEdgeCore_parseShellShimArgv parses path and value commands", () => {
   );
 });
 
-test("LocalEdgeCore_parseShellShimArgv parses artifact, URL matrix, and log-color commands", () => {
+void test("LocalEdgeCore_parseShellShimArgv parses artifact, URL matrix, and log-color commands", () => {
   assert.deepEqual(
     LocalEdgeCore_parseShellShimArgv([
       "normalize-legacy-artifact-path",
@@ -89,7 +89,7 @@ test("LocalEdgeCore_parseShellShimArgv parses artifact, URL matrix, and log-colo
   );
 });
 
-test("LocalEdgeCore_parseShellShimArgv preserves legacy parser errors", () => {
+void test("LocalEdgeCore_parseShellShimArgv preserves legacy parser errors", () => {
   assert.throws(
     () => LocalEdgeCore_parseShellShimArgv(["resolve-formatter-state", "extra"]),
     /Unexpected arguments for resolve-formatter-state: extra/,
@@ -113,7 +113,7 @@ test("LocalEdgeCore_parseShellShimArgv preserves legacy parser errors", () => {
   );
 });
 
-test("LocalEdgeCore_renderShellShimUsage lists the shell-shim command surface", () => {
+void test("LocalEdgeCore_renderShellShimUsage lists the shell-shim command surface", () => {
   const usage = LocalEdgeCore_renderShellShimUsage();
   assert.match(usage, /Usage: lib-shell-shim\.ts <command> \[options\]/);
   assert.match(usage, /resolve-formatter-state/);

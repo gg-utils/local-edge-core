@@ -28,18 +28,18 @@ import {
   LocalEdgeCore_withLogsResolveFormatterStateTsv,
 } from "./with-logs.js";
 
-test("LocalEdgeCore_withLogsResolveFormatterStateTsv defaults to formatted", () => {
+void test("LocalEdgeCore_withLogsResolveFormatterStateTsv defaults to formatted", () => {
   assert.equal(LocalEdgeCore_withLogsResolveFormatterStateTsv({}), "formatted\ttrue\ttrue");
 });
 
-test("LocalEdgeCore_withLogsRenderUsage describes compatibility subcommands", () => {
+void test("LocalEdgeCore_withLogsRenderUsage describes compatibility subcommands", () => {
   const usage = LocalEdgeCore_withLogsRenderUsage();
   assert.match(usage, /Usage: with-logs\.ts <command> \[options\]/);
   assert.match(usage, /resolve-formatter-state/);
   assert.match(usage, /format-runtime-exit --exit-code <n>/);
 });
 
-test("LocalEdgeCore_withLogsResolveFormatterStateTsv selects raw mode", () => {
+void test("LocalEdgeCore_withLogsResolveFormatterStateTsv selects raw mode", () => {
   assert.equal(
     LocalEdgeCore_withLogsResolveFormatterStateTsv({
       LOCAL_EDGE_LOG_OUTPUT_FORMAT: "raw",
@@ -48,14 +48,14 @@ test("LocalEdgeCore_withLogsResolveFormatterStateTsv selects raw mode", () => {
   );
 });
 
-test("LocalEdgeCore_withLogsFormatShutdownParentLine uses the stable prefix", () => {
+void test("LocalEdgeCore_withLogsFormatShutdownParentLine uses the stable prefix", () => {
   assert.equal(
     LocalEdgeCore_withLogsFormatShutdownParentLine("test message"),
     `${LOCAL_EDGE_CORE_WITH_LOGS_SHUTDOWN_PREFIX}test message`,
   );
 });
 
-test("LocalEdgeCore_withLogsFormatLifecycleEvent maps reclaim and checkout errors", () => {
+void test("LocalEdgeCore_withLogsFormatLifecycleEvent maps reclaim and checkout errors", () => {
   assert.equal(
     LocalEdgeCore_withLogsFormatLifecycleEvent({
       kind: "reclaim_session",
@@ -73,14 +73,14 @@ test("LocalEdgeCore_withLogsFormatLifecycleEvent maps reclaim and checkout error
   );
 });
 
-test("LocalEdgeCore_withLogsFormatRuntimeExit matches the shutdown line helper", () => {
+void test("LocalEdgeCore_withLogsFormatRuntimeExit matches the shutdown line helper", () => {
   assert.equal(
     LocalEdgeCore_withLogsFormatRuntimeExit(0),
     LocalEdgeCore_withLogsFormatShutdownParentLine("Runtime process exited with code 0."),
   );
 });
 
-test("LocalEdgeCore_withLogsIsIgnorableStdoutError recognizes EPIPE only on Error instances", () => {
+void test("LocalEdgeCore_withLogsIsIgnorableStdoutError recognizes EPIPE only on Error instances", () => {
   const epipe = new Error("write EPIPE");
   Object.defineProperty(epipe, "code", { value: "EPIPE" });
 
@@ -92,7 +92,7 @@ test("LocalEdgeCore_withLogsIsIgnorableStdoutError recognizes EPIPE only on Erro
   assert.equal(LocalEdgeCore_withLogsIsIgnorableStdoutError({ code: "EPIPE" }), false);
 });
 
-test("LocalEdgeCore_withLogsParseArgv parses format-runtime-exit", () => {
+void test("LocalEdgeCore_withLogsParseArgv parses format-runtime-exit", () => {
   assert.deepEqual(
     LocalEdgeCore_withLogsParseArgv([
       "node",
@@ -105,7 +105,7 @@ test("LocalEdgeCore_withLogsParseArgv parses format-runtime-exit", () => {
   );
 });
 
-test("LocalEdgeCore_withLogsParseArgv rejects invalid exit code", () => {
+void test("LocalEdgeCore_withLogsParseArgv rejects invalid exit code", () => {
   assert.throws(
     () =>
       LocalEdgeCore_withLogsParseArgv([
@@ -119,7 +119,7 @@ test("LocalEdgeCore_withLogsParseArgv rejects invalid exit code", () => {
   );
 });
 
-test("LocalEdgeCore_withLogsParseArgv parses required path flags", () => {
+void test("LocalEdgeCore_withLogsParseArgv parses required path flags", () => {
   assert.deepEqual(
     LocalEdgeCore_withLogsParseArgv(["node", "with-logs.ts", "print-prelude", "--log-file", "/x"]),
     { command: "print-prelude", logFile: "/x" },

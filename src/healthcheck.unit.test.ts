@@ -34,7 +34,7 @@ import {
   LocalEdgeCore_tickHealthFingerprintStability,
 } from "./healthcheck.js";
 
-test("LocalEdgeCore healthcheck helpers build stable probe keys and fingerprints", () => {
+void test("LocalEdgeCore healthcheck helpers build stable probe keys and fingerprints", () => {
   assert.equal(
     LocalEdgeCore_healthProbeKey({
       realmSlug: "main",
@@ -63,7 +63,7 @@ test("LocalEdgeCore healthcheck helpers build stable probe keys and fingerprints
   );
 });
 
-test("LocalEdgeCore healthcheck helpers compute probe rollups", () => {
+void test("LocalEdgeCore healthcheck helpers compute probe rollups", () => {
   assert.deepEqual(
     LocalEdgeCore_computeHealthProbeRollups([
       { healthy: true, failureDomain: "none" },
@@ -79,7 +79,7 @@ test("LocalEdgeCore healthcheck helpers compute probe rollups", () => {
   );
 });
 
-test("LocalEdgeCore healthcheck helpers build request paths and classify HTTP results", () => {
+void test("LocalEdgeCore healthcheck helpers build request paths and classify HTTP results", () => {
   assert.equal(
     LocalEdgeCore_buildHealthcheckRequestPath({
       statusPath: "/status",
@@ -110,7 +110,7 @@ test("LocalEdgeCore healthcheck helpers build request paths and classify HTTP re
   );
 });
 
-test("LocalEdgeCore healthcheck helpers track fingerprint stability", () => {
+void test("LocalEdgeCore healthcheck helpers track fingerprint stability", () => {
   assert.deepEqual(
     LocalEdgeCore_tickHealthFingerprintStability({
       currentHealthFingerprint: "a:1|b:0",
@@ -136,7 +136,7 @@ test("LocalEdgeCore healthcheck helpers track fingerprint stability", () => {
   );
 });
 
-test("LocalEdgeCore healthcheck helpers decide summary logging cadence", () => {
+void test("LocalEdgeCore healthcheck helpers decide summary logging cadence", () => {
   const base = {
     hasAnyUnhealthy: false,
     isFirstCycle: false,
@@ -161,7 +161,7 @@ test("LocalEdgeCore healthcheck helpers decide summary logging cadence", () => {
   );
 });
 
-test("LocalEdgeCore healthcheck helpers fail only exhausted strict watch runs", () => {
+void test("LocalEdgeCore healthcheck helpers fail only exhausted strict watch runs", () => {
   const base = {
     failedProbeCount: 1,
     maxWaitMs: 1000,
@@ -185,7 +185,7 @@ test("LocalEdgeCore healthcheck helpers fail only exhausted strict watch runs", 
   );
 });
 
-test("LocalEdgeCore healthcheck parser resolves defaults and env verbosity", () => {
+void test("LocalEdgeCore healthcheck parser resolves defaults and env verbosity", () => {
   assert.deepEqual(
     LocalEdgeCore_parseHealthcheckRuntimeOptions({
       args: [],
@@ -218,7 +218,7 @@ test("LocalEdgeCore healthcheck parser resolves defaults and env verbosity", () 
   );
 });
 
-test("LocalEdgeCore healthcheck parser preserves watch flags and deprecated method warning", () => {
+void test("LocalEdgeCore healthcheck parser preserves watch flags and deprecated method warning", () => {
   assert.deepEqual(
     LocalEdgeCore_parseHealthcheckRuntimeOptions({
       args: [
@@ -271,7 +271,7 @@ test("LocalEdgeCore healthcheck parser preserves watch flags and deprecated meth
   );
 });
 
-test("LocalEdgeCore healthcheck parser rejects invalid flag combinations", () => {
+void test("LocalEdgeCore healthcheck parser rejects invalid flag combinations", () => {
   assert.throws(
     () =>
       LocalEdgeCore_parseHealthcheckRuntimeOptions({

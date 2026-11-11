@@ -52,6 +52,7 @@ function createDependencies(existingPaths: readonly string[] = []): {
       },
       /** Records directory creation in the fake filesystem. */
       async ensureDirectory(directoryPath: string): Promise<void> {
+        await Promise.resolve();
         directories.push(directoryPath);
         existing.add(directoryPath);
       },
@@ -75,7 +76,7 @@ function createProbeDependencies(options: {
 }): LocalEdgeCore_TlsProbeDependencies {
   const existingCommands = new Set(options.existingCommands ?? []);
   const existingPaths = new Set(options.existingPaths ?? []);
-  const commandResults = options.commandResults ?? new Map();
+  const commandResults = options.commandResults ?? new Map<string, LocalEdgeCore_TlsProbeCommandResult>();
 
   return {
     /** Returns true when the fake host exposes the requested command. */
@@ -105,7 +106,7 @@ function commandResultKey(command: string, args: readonly string[]): string {
   return [command, ...args].join("\u0000");
 }
 
-test("LocalEdgeCore_ensureTlsFiles validates provided certificate paths", async () => {
+void test("LocalEdgeCore_ensureTlsFiles validates provided certificate paths", async () => {
   const { dependencies } = createDependencies(["/tmp/local-edge-cert.pem"]);
 
   await assert.rejects(
@@ -123,7 +124,7 @@ test("LocalEdgeCore_ensureTlsFiles validates provided certificate paths", async 
   );
 });
 
-test("LocalEdgeCore_ensureTlsFiles reuses mkcert files when requested", async () => {
+void test("LocalEdgeCore_ensureTlsFiles reuses mkcert files when requested", async () => {
   const { dependencies, commands } = createDependencies([
     "/tmp/local-edge-cert.pem",
     "/tmp/local-edge-key.pem",
@@ -144,7 +145,7 @@ test("LocalEdgeCore_ensureTlsFiles reuses mkcert files when requested", async ()
   assert.deepEqual(commands, []);
 });
 
-test("LocalEdgeCore_ensureTlsFiles runs mkcert with explicit output paths and hosts", async () => {
+void test("LocalEdgeCore_ensureTlsFiles runs mkcert with explicit output paths and hosts", async () => {
   const { dependencies, commands, directories } = createDependencies();
 
   const warnings = await LocalEdgeCore_ensureTlsFiles({
@@ -178,7 +179,7 @@ test("LocalEdgeCore_ensureTlsFiles runs mkcert with explicit output paths and ho
   ]);
 });
 
-test("LocalEdgeCore_ensureTlsFiles runs openssl self-signed generation", async () => {
+void test("LocalEdgeCore_ensureTlsFiles runs openssl self-signed generation", async () => {
   const { dependencies, commands } = createDependencies();
 
   const warnings = await LocalEdgeCore_ensureTlsFiles({
@@ -218,7 +219,7 @@ test("LocalEdgeCore_ensureTlsFiles runs openssl self-signed generation", async (
   ]);
 });
 
-test("LocalEdgeCore_ensureTlsFiles reports missing generated files", async () => {
+void test("LocalEdgeCore_ensureTlsFiles reports missing generated files", async () => {
   const { dependencies } = createDependencies();
   const failingDependencies: LocalEdgeCore_TlsDependencies = {
     ...dependencies,
@@ -243,7 +244,7 @@ test("LocalEdgeCore_ensureTlsFiles reports missing generated files", async () =>
   );
 });
 
-test("LocalEdgeCore_mkcertTrustDetected returns false when mkcert is unavailable", () => {
+void test("LocalEdgeCore_mkcertTrustDetected returns false when mkcert is unavailable", () => {
   assert.equal(
     LocalEdgeCore_mkcertTrustDetected(
       createProbeDependencies({
@@ -254,7 +255,7 @@ test("LocalEdgeCore_mkcertTrustDetected returns false when mkcert is unavailable
   );
 });
 
-test("LocalEdgeCore_mkcertTrustDetected accepts system keychain trust", () => {
+void test("LocalEdgeCore_mkcertTrustDetected accepts system keychain trust", () => {
   const commandResults = new Map<string, LocalEdgeCore_TlsProbeCommandResult>([
     [
       commandResultKey("mkcert", ["-CAROOT"]),
@@ -290,7 +291,7 @@ test("LocalEdgeCore_mkcertTrustDetected accepts system keychain trust", () => {
   );
 });
 
-test("LocalEdgeCore_mkcertTrustDetected accepts user CA fallback without security", () => {
+void test("LocalEdgeCore_mkcertTrustDetected accepts user CA fallback without security", () => {
   assert.equal(
     LocalEdgeCore_mkcertTrustDetected(
       createProbeDependencies({
@@ -314,7 +315,7 @@ test("LocalEdgeCore_mkcertTrustDetected accepts user CA fallback without securit
   );
 });
 
-test("LocalEdgeCore_detectTailnetSuffix prefers CurrentTailnet MagicDNS suffix", () => {
+void test("LocalEdgeCore_detectTailnetSuffix prefers CurrentTailnet MagicDNS suffix", () => {
   const dependencies = createProbeDependencies({
     commandResults: new Map([
       [
@@ -334,7 +335,7 @@ test("LocalEdgeCore_detectTailnetSuffix prefers CurrentTailnet MagicDNS suffix",
   assert.equal(LocalEdgeCore_detectTailnetSuffix(dependencies), "current.example.ts.net");
 });
 
-test("LocalEdgeCore_detectTailnetSuffix falls back to top-level MagicDNS suffix", () => {
+void test("LocalEdgeCore_detectTailnetSuffix falls back to top-level MagicDNS suffix", () => {
   const dependencies = createProbeDependencies({
     commandResults: new Map([
       [
@@ -353,7 +354,7 @@ test("LocalEdgeCore_detectTailnetSuffix falls back to top-level MagicDNS suffix"
   assert.equal(LocalEdgeCore_detectTailnetSuffix(dependencies), "global.example.ts.net");
 });
 
-test("LocalEdgeCore_resolveTailnetSuffix preserves explicit values and resolves auto", () => {
+void test("LocalEdgeCore_resolveTailnetSuffix preserves explicit values and resolves auto", () => {
   const dependencies = createProbeDependencies({
     commandResults: new Map([
       [
@@ -376,7 +377,7 @@ test("LocalEdgeCore_resolveTailnetSuffix preserves explicit values and resolves 
   assert.equal(LocalEdgeCore_resolveTailnetSuffix("auto", dependencies), "auto.example.ts.net");
 });
 
-test("LocalEdgeCore_resolveTailnetSuffix falls back to the legacy default", () => {
+void test("LocalEdgeCore_resolveTailnetSuffix falls back to the legacy default", () => {
   assert.equal(
     LocalEdgeCore_resolveTailnetSuffix(
       "auto",

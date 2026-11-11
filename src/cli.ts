@@ -69,7 +69,7 @@ export function LocalEdgeCore_parseCliArgs(
 
 /** Parsed method/mode options for render-style local-edge commands. */
 export type LocalEdgeCore_RenderCliOptions = {
-  method: "all" | string;
+  method: string;
   mode: "execute" | "check";
 };
 

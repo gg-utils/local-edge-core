@@ -31,7 +31,7 @@ import {
   LocalEdgeCore_renderStatusText,
 } from "./status.js";
 
-test("LocalEdgeCore_buildDockerComposeServiceContainerIdArgs renders compose ps args", () => {
+void test("LocalEdgeCore_buildDockerComposeServiceContainerIdArgs renders compose ps args", () => {
   assert.deepEqual(
     LocalEdgeCore_buildDockerComposeServiceContainerIdArgs({
       projectName: "local-edge-nginx-docker-demo",
@@ -51,7 +51,7 @@ test("LocalEdgeCore_buildDockerComposeServiceContainerIdArgs renders compose ps 
   );
 });
 
-test("LocalEdgeCore Docker parsers normalize command output", () => {
+void test("LocalEdgeCore Docker parsers normalize command output", () => {
   assert.equal(
     LocalEdgeCore_parseDockerComposeContainerId("\nabc123\ndef456\n"),
     "abc123",
@@ -67,7 +67,7 @@ test("LocalEdgeCore Docker parsers normalize command output", () => {
   ]);
 });
 
-test("LocalEdgeCore_probeDockerComposeServiceRunning sequences compose and inspect probes", () => {
+void test("LocalEdgeCore_probeDockerComposeServiceRunning sequences compose and inspect probes", () => {
   const calls: string[][] = [];
 
   assert.equal(
@@ -102,7 +102,7 @@ test("LocalEdgeCore_probeDockerComposeServiceRunning sequences compose and inspe
   ]);
 });
 
-test("LocalEdgeCore_probeDockerComposeServiceRunning treats absent or failed probes as stopped", () => {
+void test("LocalEdgeCore_probeDockerComposeServiceRunning treats absent or failed probes as stopped", () => {
   assert.equal(
     LocalEdgeCore_probeDockerComposeServiceRunning({
       projectName: "demo",
@@ -130,7 +130,7 @@ test("LocalEdgeCore_probeDockerComposeServiceRunning treats absent or failed pro
   );
 });
 
-test("LocalEdgeCore status report renders legacy text output", () => {
+void test("LocalEdgeCore status report renders legacy text output", () => {
   const report = LocalEdgeCore_buildStatusReport({
     selectedMethod: "nginx-docker",
     configuredMethods: ["nginx-docker"],
@@ -151,7 +151,7 @@ test("LocalEdgeCore status report renders legacy text output", () => {
   );
 });
 
-test("LocalEdgeCore status report renders all-method text and legacy JSON", () => {
+void test("LocalEdgeCore status report renders all-method text and legacy JSON", () => {
   const report = LocalEdgeCore_buildStatusReport({
     selectedMethod: "all",
     configuredMethods: ["nginx-docker"],
@@ -180,7 +180,7 @@ test("LocalEdgeCore status report renders all-method text and legacy JSON", () =
   });
 });
 
-test("LocalEdgeCore status CLI parser preserves legacy status flags", () => {
+void test("LocalEdgeCore status CLI parser preserves legacy status flags", () => {
   assert.deepEqual(
     LocalEdgeCore_parseStatusCliArgs({
       args: ["--json", "--require-all", "--require-running", "--method", "all"],

@@ -70,4 +70,3 @@ export declare function LocalEdgeCore_mkcertTrustDetected(dependencies?: LocalEd
 export declare function LocalEdgeCore_detectTailnetSuffix(dependencies?: LocalEdgeCore_TlsProbeDependencies): string | null;
 /** Resolves a configured, auto-detected, or default Tailscale MagicDNS suffix. */
 export declare function LocalEdgeCore_resolveTailnetSuffix(configuredValue: string, dependencies?: LocalEdgeCore_TlsProbeDependencies): string;
-//# sourceMappingURL=tls.d.ts.map

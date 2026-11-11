@@ -42,4 +42,3 @@ export type LocalEdgeCore_HostnameMatrixOptions = Omit<LocalEdgeCore_HostnamePar
 export declare function LocalEdgeCore_buildHostnameFromParts(options: LocalEdgeCore_HostnameParts): string;
 /** Builds a hostname matrix for caller-provided surface labels. */
 export declare function LocalEdgeCore_buildHostnamesForSurfaces(options: LocalEdgeCore_HostnameMatrixOptions): Record<string, string>;
-//# sourceMappingURL=hostname.d.ts.map

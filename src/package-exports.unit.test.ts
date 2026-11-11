@@ -30,7 +30,7 @@ import {
   LocalEdgeCore_renderNginxServerBlock,
 } from "@gg-utils/local-edge-core/router/nginx-docker";
 
-test("package subpath exports expose the Level A public API surface", () => {
+void test("package subpath exports expose the Level A public API surface", () => {
   const manifest: LocalEdgeCore_Manifest = {
     schemaVersion: 1,
     packageName: "demo",

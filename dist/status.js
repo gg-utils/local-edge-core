@@ -190,4 +190,3 @@ export function LocalEdgeCore_renderStatusJson(report) {
         allRunning: report.allRunning,
     }, null, 2);
 }
-//# sourceMappingURL=status.js.map

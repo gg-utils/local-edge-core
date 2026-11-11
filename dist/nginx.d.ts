@@ -99,4 +99,3 @@ export declare function LocalEdgeCore_renderNginxServerBlock(options: LocalEdgeC
 export declare function LocalEdgeCore_renderNginxHttpConfig(options: LocalEdgeCore_NginxHttpConfigOptions): string;
 /** Renders a generic Docker Compose file for one nginx-docker router service. */
 export declare function LocalEdgeCore_renderNginxDockerCompose(options: LocalEdgeCore_NginxDockerComposeOptions): string;
-//# sourceMappingURL=nginx.d.ts.map

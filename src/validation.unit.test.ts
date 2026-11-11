@@ -32,7 +32,7 @@ import {
   LocalEdgeCore_warnOrFail,
 } from "./validation.js";
 
-test("LocalEdgeCore_validatePort accepts and rejects TCP port bounds", () => {
+void test("LocalEdgeCore_validatePort accepts and rejects TCP port bounds", () => {
   assert.equal(LocalEdgeCore_validatePort({ label: "test", value: "443" }).ok, true);
   assert.equal(LocalEdgeCore_validatePort({ label: "test", value: "1" }).ok, true);
   assert.equal(LocalEdgeCore_validatePort({ label: "test", value: "65535" }).ok, true);
@@ -41,7 +41,7 @@ test("LocalEdgeCore_validatePort accepts and rejects TCP port bounds", () => {
   assert.equal(LocalEdgeCore_validatePort({ label: "test", value: "70000" }).ok, false);
 });
 
-test("LocalEdgeCore_validatePositiveInteger accepts integers >= 1", () => {
+void test("LocalEdgeCore_validatePositiveInteger accepts integers >= 1", () => {
   assert.equal(
     LocalEdgeCore_validatePositiveInteger({ label: "test", value: "1" }).ok,
     true,
@@ -56,14 +56,14 @@ test("LocalEdgeCore_validatePositiveInteger accepts integers >= 1", () => {
   );
 });
 
-test("LocalEdgeCore_shouldFailHard reads strict-start truthy tokens", () => {
+void test("LocalEdgeCore_shouldFailHard reads strict-start truthy tokens", () => {
   assert.equal(LocalEdgeCore_shouldFailHard({}), false);
   assert.equal(LocalEdgeCore_shouldFailHard({ LOCAL_EDGE_STRICT_START: "true" }), true);
   assert.equal(LocalEdgeCore_shouldFailHard({ LOCAL_EDGE_STRICT_START: "1" }), true);
   assert.equal(LocalEdgeCore_shouldFailHard({ LOCAL_EDGE_STRICT_START: "false" }), false);
 });
 
-test("LocalEdgeCore_warnOrFail warns before optional strict failure", () => {
+void test("LocalEdgeCore_warnOrFail warns before optional strict failure", () => {
   const warnings: string[] = [];
   LocalEdgeCore_warnOrFail({
     message: "non-strict",
@@ -84,7 +84,7 @@ test("LocalEdgeCore_warnOrFail warns before optional strict failure", () => {
   assert.deepEqual(warnings, ["non-strict", "strict"]);
 });
 
-test("LocalEdgeCore_requireFilePath checks existence", () => {
+void test("LocalEdgeCore_requireFilePath checks existence", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "local-edge-validation-"));
   try {
     const existingPath = path.join(tempDir, "file.txt");
@@ -106,7 +106,7 @@ test("LocalEdgeCore_requireFilePath checks existence", () => {
   }
 });
 
-test("LocalEdgeCore_extractCommandBin normalizes the leading command token", () => {
+void test("LocalEdgeCore_extractCommandBin normalizes the leading command token", () => {
   assert.equal(LocalEdgeCore_extractCommandBin("docker compose up"), "docker");
   assert.equal(LocalEdgeCore_extractCommandBin("  docker info"), "docker");
   assert.equal(LocalEdgeCore_extractCommandBin('"docker" compose'), "docker");

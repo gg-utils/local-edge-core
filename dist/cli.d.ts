@@ -24,7 +24,7 @@ export type LocalEdgeCore_CliParseResult = {
 export declare function LocalEdgeCore_parseCliArgs(args: readonly string[]): LocalEdgeCore_CliParseResult;
 /** Parsed method/mode options for render-style local-edge commands. */
 export type LocalEdgeCore_RenderCliOptions = {
-    method: "all" | string;
+    method: string;
     mode: "execute" | "check";
 };
 /** Parses render command argv without loading env or writing artifacts. */
@@ -38,4 +38,3 @@ export declare function LocalEdgeCore_parseRenderCliArgs(options: {
 export declare function LocalEdgeCore_renderCliOutput(options: LocalEdgeCore_CliParseResult): string;
 /** Runs the package-core CLI shell and returns a process-style exit code. */
 export declare function LocalEdgeCore_runCli(args: readonly string[]): number;
-//# sourceMappingURL=cli.d.ts.map

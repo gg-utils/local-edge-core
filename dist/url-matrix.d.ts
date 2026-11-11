@@ -17,7 +17,7 @@
  */
 /** Parsed method/help options for URL-matrix commands. */
 export type LocalEdgeCore_UrlMatrixCliOptions = {
-    method: "all" | "primary" | string;
+    method: string;
     help: boolean;
 };
 /** Parses URL-matrix argv without loading env, resolving surfaces, or printing output. */
@@ -49,4 +49,3 @@ export declare function LocalEdgeCore_buildUrlMatrixLines(options: {
     rootZone: string;
     surfaces: readonly LocalEdgeCore_UrlMatrixSurface[];
 }): string[];
-//# sourceMappingURL=url-matrix.d.ts.map

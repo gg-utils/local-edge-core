@@ -34,7 +34,7 @@ import {
   LocalEdgeCore_validateParsedLogsCli,
 } from "./logs.js";
 
-test("LocalEdgeCore_parseLogsCli defaults to tail run logs", () => {
+void test("LocalEdgeCore_parseLogsCli defaults to tail run logs", () => {
   const result = LocalEdgeCore_parseLogsCli({
     argv: [],
     defaultLines: "1000",
@@ -57,7 +57,7 @@ test("LocalEdgeCore_parseLogsCli defaults to tail run logs", () => {
   }
 });
 
-test("LocalEdgeCore_parseLogsCli parses history all token selectors", () => {
+void test("LocalEdgeCore_parseLogsCli parses history all token selectors", () => {
   const result = LocalEdgeCore_parseLogsCli({
     argv: [
       "history",
@@ -83,7 +83,7 @@ test("LocalEdgeCore_parseLogsCli parses history all token selectors", () => {
   }
 });
 
-test("LocalEdgeCore_parseLogsCli supports recent-only as history alias", () => {
+void test("LocalEdgeCore_parseLogsCli supports recent-only as history alias", () => {
   const result = LocalEdgeCore_parseLogsCli({
     argv: ["tail", "--recent-only", "--lines", "5"],
     defaultLines: "1000",
@@ -97,7 +97,7 @@ test("LocalEdgeCore_parseLogsCli supports recent-only as history alias", () => {
   }
 });
 
-test("LocalEdgeCore_parseLogsCli reports help and parse errors without exiting", () => {
+void test("LocalEdgeCore_parseLogsCli reports help and parse errors without exiting", () => {
   assert.deepEqual(
     LocalEdgeCore_parseLogsCli({
       argv: ["tail", "--help"],
@@ -123,7 +123,7 @@ test("LocalEdgeCore_parseLogsCli reports help and parse errors without exiting",
   );
 });
 
-test("LocalEdgeCore_parseLogsCli reports unknown options with usage", () => {
+void test("LocalEdgeCore_parseLogsCli reports unknown options with usage", () => {
   assert.deepEqual(
     LocalEdgeCore_parseLogsCli({
       argv: ["tail", "--bogus"],
@@ -140,7 +140,7 @@ test("LocalEdgeCore_parseLogsCli reports unknown options with usage", () => {
   );
 });
 
-test("LocalEdgeCore_validateParsedLogsCli preserves selector validation messages", () => {
+void test("LocalEdgeCore_validateParsedLogsCli preserves selector validation messages", () => {
   const parsed = LocalEdgeCore_parseLogsCli({
     argv: ["tail", "--chars-per-token", "3"],
     defaultLines: "1000",
@@ -156,7 +156,7 @@ test("LocalEdgeCore_validateParsedLogsCli preserves selector validation messages
   }
 });
 
-test("LocalEdgeCore_buildLogsFollowSelectorArgs builds tail args", () => {
+void test("LocalEdgeCore_buildLogsFollowSelectorArgs builds tail args", () => {
   const parsed = LocalEdgeCore_parseLogsCli({
     argv: ["tail", "--tokens", "3", "--chars-per-token", "2.5"],
     defaultLines: "1000",
@@ -174,7 +174,7 @@ test("LocalEdgeCore_buildLogsFollowSelectorArgs builds tail args", () => {
   }
 });
 
-test("LocalEdgeCore_logs helpers format lines and defaults", () => {
+void test("LocalEdgeCore_logs helpers format lines and defaults", () => {
   assert.equal(LocalEdgeCore_formatLogsInfoLine("hello"), "[local-edge:logs] hello");
   assert.equal(LocalEdgeCore_formatLogsErrorLine("bad"), "[local-edge:logs] bad");
   assert.equal(LocalEdgeCore_logsTokensToCharBudget({ tokens: 1, charsPerToken: 0.1 }), 1);
@@ -190,7 +190,7 @@ test("LocalEdgeCore_logs helpers format lines and defaults", () => {
   assert.match(LocalEdgeCore_renderLogsUsage(), /logs\.ts tail \[options\]/);
 });
 
-test("LocalEdgeCore_buildLogsPathLayout renders the standard local-edge log paths", () => {
+void test("LocalEdgeCore_buildLogsPathLayout renders the standard local-edge log paths", () => {
   assert.deepEqual(LocalEdgeCore_buildLogsPathLayout("/repo"), {
     localEdgeLogDir: "/repo/logs/local-edge",
     runLogDir: "/repo/logs/local-edge/runs",
@@ -199,7 +199,7 @@ test("LocalEdgeCore_buildLogsPathLayout renders the standard local-edge log path
   });
 });
 
-test("LocalEdgeCore_resolveLogsScopeFiles resolves run and static scope files", () => {
+void test("LocalEdgeCore_resolveLogsScopeFiles resolves run and static scope files", () => {
   const pathLayout = LocalEdgeCore_buildLogsPathLayout("/repo");
   const existing = new Set([
     "/repo/logs/local-edge/runs/latest.log",
@@ -230,7 +230,7 @@ test("LocalEdgeCore_resolveLogsScopeFiles resolves run and static scope files", 
   }
 });
 
-test("LocalEdgeCore_resolveLogsScopeFiles honors indexed run log selection", () => {
+void test("LocalEdgeCore_resolveLogsScopeFiles honors indexed run log selection", () => {
   const pathLayout = LocalEdgeCore_buildLogsPathLayout("/repo");
   const parsed = LocalEdgeCore_parseLogsCli({
     argv: ["history", "--scope", "run", "--run-index", "3"],

@@ -163,6 +163,7 @@ function LocalEdgeCore_parsePositiveIntArg(options: {
     return null;
   }
   const rawValue = options.args[argIndex + 1];
+  if (!rawValue) return null;
   const parsedValue = Number.parseInt(rawValue, 10);
   if (!Number.isFinite(parsedValue) || parsedValue < 1) {
     throw new Error(
@@ -196,6 +197,7 @@ function LocalEdgeCore_validateHealthcheckArgs(options: {
 
   for (let index = 0; index < options.args.length; index += 1) {
     const argument = options.args[index];
+    if (argument === undefined) continue;
 
     if (flagsWithValues.has(argument)) {
       const value = options.args[index + 1];
@@ -225,7 +227,7 @@ function LocalEdgeCore_getFlagValue(options: {
   if (argIndex === -1 || !options.args[argIndex + 1]) {
     return null;
   }
-  return options.args[argIndex + 1];
+  return options.args[argIndex + 1] ?? null;
 }
 
 /** Parses the healthcheck method selector and returns any compatibility warnings. */

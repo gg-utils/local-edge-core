@@ -21,7 +21,7 @@ import { LocalEdgeCore_validateRequestedMethod } from "./method-config.js";
 
 /** Parsed method/help options for URL-matrix commands. */
 export type LocalEdgeCore_UrlMatrixCliOptions = {
-  method: "all" | "primary" | string;
+  method: string;
   help: boolean;
 };
 
@@ -36,6 +36,7 @@ export function LocalEdgeCore_parseUrlMatrixCliArgs(options: {
 
   for (let index = 0; index < options.args.length; index += 1) {
     const argument = options.args[index];
+    if (argument === undefined) continue;
 
     if (argument === "--method") {
       const value = options.args[index + 1] ?? "";

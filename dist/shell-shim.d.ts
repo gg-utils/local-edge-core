@@ -47,4 +47,3 @@ export declare class LocalEdgeCoreShellShimError extends Error {
 export declare function LocalEdgeCore_renderShellShimUsage(): string;
 /** Parses command argv where argv[0] is the shell-shim subcommand token. */
 export declare function LocalEdgeCore_parseShellShimArgv(argv: readonly string[]): LocalEdgeCore_ShellShimParseResult;
-//# sourceMappingURL=shell-shim.d.ts.map

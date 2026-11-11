@@ -32,7 +32,7 @@ import {
   LocalEdgeCore_resolveLogOutputFormat,
 } from "./log-output.js";
 
-test("LocalEdgeCore_isTruthy preserves compatibility token semantics", () => {
+void test("LocalEdgeCore_isTruthy preserves compatibility token semantics", () => {
   assert.equal(LocalEdgeCore_isTruthy("1"), true);
   assert.equal(LocalEdgeCore_isTruthy("true"), true);
   assert.equal(LocalEdgeCore_isTruthy("TRUE"), true);
@@ -42,7 +42,7 @@ test("LocalEdgeCore_isTruthy preserves compatibility token semantics", () => {
   assert.equal(LocalEdgeCore_isTruthy(undefined), false);
 });
 
-test("LocalEdgeCore log output format helpers normalize formatter state", () => {
+void test("LocalEdgeCore log output format helpers normalize formatter state", () => {
   assert.equal(LocalEdgeCore_resolveLogOutputFormat(undefined), "formatted");
   assert.equal(LocalEdgeCore_resolveLogOutputFormat("raw"), "raw");
   assert.equal(LocalEdgeCore_resolveLogOutputFormat("fancy"), "formatted");
@@ -52,7 +52,7 @@ test("LocalEdgeCore log output format helpers normalize formatter state", () => 
   assert.equal(LocalEdgeCore_logFormatterActiveValue("raw"), "false");
 });
 
-test("LocalEdgeCore_logColorEnabled follows formatter, NO_COLOR, explicit, and TTY precedence", () => {
+void test("LocalEdgeCore_logColorEnabled follows formatter, NO_COLOR, explicit, and TTY precedence", () => {
   assert.equal(
     LocalEdgeCore_logColorEnabled({
       formatterActive: true,
@@ -91,7 +91,7 @@ test("LocalEdgeCore_logColorEnabled follows formatter, NO_COLOR, explicit, and T
   );
 });
 
-test("LocalEdgeCore_buildWithLogsPrelude renders command labels from explicit inputs", () => {
+void test("LocalEdgeCore_buildWithLogsPrelude renders command labels from explicit inputs", () => {
   assert.equal(
     LocalEdgeCore_buildWithLogsPrelude({
       logFile: "/tmp/local-edge.log",
@@ -113,21 +113,21 @@ test("LocalEdgeCore_buildWithLogsPrelude renders command labels from explicit in
   );
 });
 
-test("LocalEdgeCore log writers preserve legacy stdout and stderr prefixes", () => {
+void test("LocalEdgeCore log writers preserve legacy stdout and stderr prefixes", () => {
   const stdoutChunks: string[] = [];
   const stderrChunks: string[] = [];
-  const originalStdoutWrite = process.stdout.write;
-  const originalStderrWrite = process.stderr.write;
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
 
   try {
     process.stdout.write = ((chunk: string) => {
       stdoutChunks.push(chunk);
       return true;
-    }) as typeof process.stdout.write;
+    });
     process.stderr.write = ((chunk: string) => {
       stderrChunks.push(chunk);
       return true;
-    }) as typeof process.stderr.write;
+    });
 
     LocalEdgeCore_logInfo("hello", { colorEnabled: false });
     LocalEdgeCore_logSuccess("done", { colorEnabled: false });
@@ -148,15 +148,15 @@ test("LocalEdgeCore log writers preserve legacy stdout and stderr prefixes", () 
   }
 });
 
-test("LocalEdgeCore_logSection emits formatter marker or divider block", () => {
+void test("LocalEdgeCore_logSection emits formatter marker or divider block", () => {
   const stdoutChunks: string[] = [];
-  const originalStdoutWrite = process.stdout.write;
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
 
   try {
     process.stdout.write = ((chunk: string) => {
       stdoutChunks.push(chunk);
       return true;
-    }) as typeof process.stdout.write;
+    });
 
     LocalEdgeCore_logSection("Title", {
       colorEnabled: false,

@@ -121,7 +121,7 @@ export function LocalEdgeCore_validateRequestedMethod(options: {
   commandLabel: string;
   method: string;
   supportedMethods: readonly string[];
-}): "all" | string {
+}): string {
   if (options.method.length === 0) {
     throw new Error(`[${options.commandLabel}] --method requires a value.`);
   }

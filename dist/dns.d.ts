@@ -118,4 +118,3 @@ export declare function LocalEdgeCore_formatDnsAuditWarningLine(options: {
 export declare function LocalEdgeCore_formatDnsAuditSummaryLine(state: LocalEdgeCore_DnsAuditState): string;
 /** Renders the DNS audit artifact body without writing to disk. */
 export declare function LocalEdgeCore_renderDnsAuditArtifact(options: LocalEdgeCore_RenderDnsAuditArtifactOptions): string;
-//# sourceMappingURL=dns.d.ts.map

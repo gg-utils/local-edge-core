@@ -56,4 +56,3 @@ export declare function LocalEdgeCore_logError(message: string, options: LocalEd
 export declare function LocalEdgeCore_logSection(title: string, options: LocalEdgeCore_LogOptions & {
     formatterActive: boolean;
 }): void;
-//# sourceMappingURL=log-output.d.ts.map

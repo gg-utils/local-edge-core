@@ -1,3 +1,2 @@
-#!/usr/bin/env tsx
+#!/usr/bin/env node
 export {};
-//# sourceMappingURL=local-edge.d.ts.map

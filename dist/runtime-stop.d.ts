@@ -96,4 +96,3 @@ export declare function LocalEdgeCore_runtimeStopTerminateListenersOnPort(option
     spawnSync?: LocalEdgeCore_RuntimeStop_SpawnSync;
     terminatePidList?: (pids: number[]) => void;
 }): void;
-//# sourceMappingURL=runtime-stop.d.ts.map

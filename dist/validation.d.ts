@@ -47,4 +47,3 @@ export declare function LocalEdgeCore_requireFilePath(options: {
 }): LocalEdgeCore_ValidationResult;
 /** Extracts the leading binary name from a shell command string. */
 export declare function LocalEdgeCore_extractCommandBin(command: string): string;
-//# sourceMappingURL=validation.d.ts.map

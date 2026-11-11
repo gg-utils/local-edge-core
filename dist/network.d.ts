@@ -30,19 +30,19 @@ export declare function LocalEdgeCore_isTcpPortListening(options: LocalEdgeCore_
 /** Returns true when a TCP listener is active on `port`, optionally scoped to `host`. */
 export declare function LocalEdgeCore_isPortListening(options: {
     port: number;
-    host?: string;
+    host?: string | undefined;
 }): boolean;
 /** Polls until `port` has an active listener or `timeoutSeconds` elapses. */
 export declare function LocalEdgeCore_waitForPort(options: {
     port: number;
     timeoutSeconds: number;
-    host?: string;
+    host?: string | undefined;
 }): boolean;
 /** Polls until `port` has no active listener or `timeoutSeconds` elapses. */
 export declare function LocalEdgeCore_waitForPortClosed(options: {
     port: number;
     timeoutSeconds: number;
-    host?: string;
+    host?: string | undefined;
 }): boolean;
 /** Returns true when a loopback alias for `ip` exists on `lo0`; `127.0.0.1` is always present. */
 export declare function LocalEdgeCore_loopbackAliasExists(ip: string): boolean;
@@ -60,4 +60,3 @@ export declare function LocalEdgeCore_legacyProxyConflictPresent(options: {
     port: number;
     host: string;
 }): boolean;
-//# sourceMappingURL=network.d.ts.map

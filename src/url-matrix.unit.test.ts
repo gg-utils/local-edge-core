@@ -25,7 +25,7 @@ import {
   LocalEdgeCore_parseUrlMatrixCliArgs,
 } from "./url-matrix.js";
 
-test("LocalEdgeCore_formatHttpsUrl omits port 443 and preserves custom ports", () => {
+void test("LocalEdgeCore_formatHttpsUrl omits port 443 and preserves custom ports", () => {
   assert.equal(
     LocalEdgeCore_formatHttpsUrl({
       host: "www.main.nginx-docker.dev.local.test",
@@ -44,7 +44,7 @@ test("LocalEdgeCore_formatHttpsUrl omits port 443 and preserves custom ports", (
   );
 });
 
-test("LocalEdgeCore_buildUrlMatrixLines renders generic surface app/status pairs", () => {
+void test("LocalEdgeCore_buildUrlMatrixLines renders generic surface app/status pairs", () => {
   assert.deepEqual(
     LocalEdgeCore_buildUrlMatrixLines({
       method: "nginx-docker",
@@ -69,7 +69,7 @@ test("LocalEdgeCore_buildUrlMatrixLines renders generic surface app/status pairs
   );
 });
 
-test("LocalEdgeCore_parseUrlMatrixCliArgs preserves URL matrix method selectors", () => {
+void test("LocalEdgeCore_parseUrlMatrixCliArgs preserves URL matrix method selectors", () => {
   assert.deepEqual(
     LocalEdgeCore_parseUrlMatrixCliArgs({
       args: [],
@@ -108,7 +108,7 @@ test("LocalEdgeCore_parseUrlMatrixCliArgs preserves URL matrix method selectors"
   );
 });
 
-test("LocalEdgeCore_parseUrlMatrixCliArgs preserves URL matrix errors", () => {
+void test("LocalEdgeCore_parseUrlMatrixCliArgs preserves URL matrix errors", () => {
   assert.throws(
     () =>
       LocalEdgeCore_parseUrlMatrixCliArgs({

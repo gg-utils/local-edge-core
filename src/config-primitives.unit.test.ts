@@ -27,18 +27,18 @@ import {
   LocalEdgeCore_parseRequiredPositiveInt,
 } from "./config-primitives.js";
 
-test("LocalEdgeCore_normalizeSlug builds DNS-safe slugs", () => {
+void test("LocalEdgeCore_normalizeSlug builds DNS-safe slugs", () => {
   assert.equal(LocalEdgeCore_normalizeSlug(" Feature/Main_01 "), "feature-main-01");
 });
 
-test("LocalEdgeCore_normalizeSlugOrFallback uses fallback when primary is empty", () => {
+void test("LocalEdgeCore_normalizeSlugOrFallback uses fallback when primary is empty", () => {
   assert.equal(
     LocalEdgeCore_normalizeSlugOrFallback({ value: "---", fallback: "Dev User" }),
     "dev-user",
   );
 });
 
-test("LocalEdgeCore_parseRequiredPositiveInt rejects non-positive values", () => {
+void test("LocalEdgeCore_parseRequiredPositiveInt rejects non-positive values", () => {
   assert.equal(
     LocalEdgeCore_parseRequiredPositiveInt({ rawValue: "4011", envName: "PORT" }),
     4011,
@@ -49,7 +49,7 @@ test("LocalEdgeCore_parseRequiredPositiveInt rejects non-positive values", () =>
   );
 });
 
-test("LocalEdgeCore_parseOptionalBooleanFlag parses explicit boolean tokens", () => {
+void test("LocalEdgeCore_parseOptionalBooleanFlag parses explicit boolean tokens", () => {
   assert.equal(
     LocalEdgeCore_parseOptionalBooleanFlag({
       rawValue: undefined,
@@ -68,7 +68,7 @@ test("LocalEdgeCore_parseOptionalBooleanFlag parses explicit boolean tokens", ()
   );
 });
 
-test("LocalEdgeCore_parseRequiredHostOrIp trims non-empty host values", () => {
+void test("LocalEdgeCore_parseRequiredHostOrIp trims non-empty host values", () => {
   assert.equal(
     LocalEdgeCore_parseRequiredHostOrIp({ rawValue: " 127.0.0.1 ", envName: "HOST" }),
     "127.0.0.1",
@@ -79,13 +79,13 @@ test("LocalEdgeCore_parseRequiredHostOrIp trims non-empty host values", () => {
   );
 });
 
-test("LocalEdgeCore_parseOptionalTrimmedValue returns null for blank values", () => {
+void test("LocalEdgeCore_parseOptionalTrimmedValue returns null for blank values", () => {
   assert.equal(LocalEdgeCore_parseOptionalTrimmedValue("  value  "), "value");
   assert.equal(LocalEdgeCore_parseOptionalTrimmedValue("   "), null);
   assert.equal(LocalEdgeCore_parseOptionalTrimmedValue(undefined), null);
 });
 
-test("LocalEdgeCore_assertUniquePorts rejects duplicate ports", () => {
+void test("LocalEdgeCore_assertUniquePorts rejects duplicate ports", () => {
   assert.throws(
     () =>
       LocalEdgeCore_assertUniquePorts([

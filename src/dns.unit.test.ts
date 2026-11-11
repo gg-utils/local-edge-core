@@ -36,7 +36,7 @@ import {
   LocalEdgeCore_resolveMacosResolverPath,
 } from "./dns.js";
 
-test("LocalEdgeCore_renderDnsmasqConfig renders method wildcard rules", () => {
+void test("LocalEdgeCore_renderDnsmasqConfig renders method wildcard rules", () => {
   assert.equal(
     LocalEdgeCore_renderDnsmasqConfig({
       port: "53535",
@@ -63,7 +63,7 @@ address=/.local.example.test/127.0.0.9
   );
 });
 
-test("LocalEdgeCore_renderMacosResolverContent renders resolver directives", () => {
+void test("LocalEdgeCore_renderMacosResolverContent renders resolver directives", () => {
   assert.equal(
     LocalEdgeCore_renderMacosResolverContent({
       nameserver: "127.0.0.1",
@@ -79,7 +79,7 @@ search_order 1
   );
 });
 
-test("LocalEdgeCore_parseMacosResolverContent extracts first nameserver and port", () => {
+void test("LocalEdgeCore_parseMacosResolverContent extracts first nameserver and port", () => {
   assert.deepEqual(
     LocalEdgeCore_parseMacosResolverContent(`
 # comment
@@ -92,7 +92,7 @@ port 9999
   );
 });
 
-test("LocalEdgeCore_collectRequiredLoopbackAliases returns unique non-default 127 aliases", () => {
+void test("LocalEdgeCore_collectRequiredLoopbackAliases returns unique non-default 127 aliases", () => {
   assert.deepEqual(
     LocalEdgeCore_collectRequiredLoopbackAliases({
       listenHosts: [
@@ -108,7 +108,7 @@ test("LocalEdgeCore_collectRequiredLoopbackAliases returns unique non-default 12
   );
 });
 
-test("LocalEdgeCore_resolveMacosResolverPath trims trailing resolver dir slashes", () => {
+void test("LocalEdgeCore_resolveMacosResolverPath trims trailing resolver dir slashes", () => {
   assert.equal(
     LocalEdgeCore_resolveMacosResolverPath({
       resolverDir: "/etc/resolver///",
@@ -118,7 +118,7 @@ test("LocalEdgeCore_resolveMacosResolverPath trims trailing resolver dir slashes
   );
 });
 
-test("LocalEdgeCore_parseDnsAuditCliArgs parses method and strict flags", () => {
+void test("LocalEdgeCore_parseDnsAuditCliArgs parses method and strict flags", () => {
   assert.deepEqual(
     LocalEdgeCore_parseDnsAuditCliArgs({
       args: ["--method", "nginx-docker", "--strict", "--skip-direct-probe"],
@@ -137,7 +137,7 @@ test("LocalEdgeCore_parseDnsAuditCliArgs parses method and strict flags", () => 
   );
 });
 
-test("LocalEdgeCore_parseDnsAuditCliArgs reports unsupported flags and methods", () => {
+void test("LocalEdgeCore_parseDnsAuditCliArgs reports unsupported flags and methods", () => {
   assert.deepEqual(
     LocalEdgeCore_parseDnsAuditCliArgs({
       args: ["--method", "other"],
@@ -167,7 +167,7 @@ test("LocalEdgeCore_parseDnsAuditCliArgs reports unsupported flags and methods",
   );
 });
 
-test("LocalEdgeCore DNS audit state helpers format lines and artifact content", () => {
+void test("LocalEdgeCore DNS audit state helpers format lines and artifact content", () => {
   const state = LocalEdgeCore_createDnsAuditState();
   LocalEdgeCore_recordDnsAuditPass(state);
   LocalEdgeCore_recordDnsAuditFailure({

@@ -188,7 +188,7 @@ function stopProbeServer(child: ChildProcessWithoutNullStreams): Promise<void> {
   });
 }
 
-test("LocalEdgeCore_isTcpPortListening returns true for an accepting socket", async () => {
+void test("LocalEdgeCore_isTcpPortListening returns true for an accepting socket", async () => {
   const server = net.createServer((socket) => {
     socket.end();
   });
@@ -213,7 +213,7 @@ test("LocalEdgeCore_isTcpPortListening returns true for an accepting socket", as
   }
 });
 
-test("LocalEdgeCore_isTcpPortListening returns false for an unused local port", async () => {
+void test("LocalEdgeCore_isTcpPortListening returns false for an unused local port", async () => {
   const server = net.createServer();
   await listen(server, "127.0.0.1", 0);
   const address = server.address();
@@ -234,7 +234,7 @@ test("LocalEdgeCore_isTcpPortListening returns false for an unused local port", 
   );
 });
 
-test("LocalEdgeCore_isPortListening and wait helpers detect a live TCP listener", async () => {
+void test("LocalEdgeCore_isPortListening and wait helpers detect a live TCP listener", async () => {
   const server = net.createServer((socket) => {
     socket.end();
   });
@@ -266,7 +266,7 @@ test("LocalEdgeCore_isPortListening and wait helpers detect a live TCP listener"
   }
 });
 
-test("LocalEdgeCore_waitForPortClosed returns true for an unused local port", async () => {
+void test("LocalEdgeCore_waitForPortClosed returns true for an unused local port", async () => {
   const server = net.createServer();
   await listen(server, "127.0.0.1", 0);
   const address = server.address();
@@ -287,11 +287,11 @@ test("LocalEdgeCore_waitForPortClosed returns true for an unused local port", as
   );
 });
 
-test("LocalEdgeCore_loopbackAliasExists accepts the default loopback alias", () => {
+void test("LocalEdgeCore_loopbackAliasExists accepts the default loopback alias", () => {
   assert.equal(LocalEdgeCore_loopbackAliasExists("127.0.0.1"), true);
 });
 
-test("LocalEdgeCore_routerHostProbe accepts a local HTTP response code", async () => {
+void test("LocalEdgeCore_routerHostProbe accepts a local HTTP response code", async () => {
   const previousNoProxy = process.env.NO_PROXY;
   process.env.NO_PROXY = "*";
   const server = await startProbeServer();
@@ -315,7 +315,7 @@ test("LocalEdgeCore_routerHostProbe accepts a local HTTP response code", async (
   }
 });
 
-test("LocalEdgeCore_legacyProxyConflictPresent is false when the marker plist is missing", async () => {
+void test("LocalEdgeCore_legacyProxyConflictPresent is false when the marker plist is missing", async () => {
   const server = net.createServer((socket) => {
     socket.end();
   });

@@ -32,7 +32,7 @@
  */
 /** Parsed CLI flags for generic local-edge status commands. */
 export type LocalEdgeCore_StatusCliOptions = {
-    method: "all" | string;
+    method: string;
     outputMode: "json" | "text";
     requireAll: boolean;
     requireRunning: boolean;
@@ -67,7 +67,7 @@ export type LocalEdgeCore_StatusReport = {
 };
 /** Options for building a status report from configured methods and probe results. */
 export type LocalEdgeCore_BuildStatusReportOptions = {
-    selectedMethod: "all" | string;
+    selectedMethod: string;
     configuredMethods: readonly string[];
     methodStatuses: readonly LocalEdgeCore_MethodStatus[];
 };
@@ -109,4 +109,3 @@ export declare function LocalEdgeCore_buildStatusReport(options: LocalEdgeCore_B
 export declare function LocalEdgeCore_renderStatusText(report: LocalEdgeCore_StatusReport): string;
 /** Renders the status report as the legacy JSON object shape. */
 export declare function LocalEdgeCore_renderStatusJson(report: LocalEdgeCore_StatusReport): string;
-//# sourceMappingURL=status.d.ts.map

@@ -1,4 +1,4 @@
-#!/usr/bin/env tsx
+#!/usr/bin/env node
 /**
  * @fileoverview tsx-backed executable entry for the agnostic local-edge package-core CLI.
  *

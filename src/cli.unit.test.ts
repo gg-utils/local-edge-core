@@ -45,7 +45,7 @@ import {
   LocalEdgeCore_renderCliOutput,
 } from "./cli.js";
 
-test("LocalEdgeCore_parseCliArgs parses global dry-run manifest flags", () => {
+void test("LocalEdgeCore_parseCliArgs parses global dry-run manifest flags", () => {
   assert.deepEqual(
     LocalEdgeCore_parseCliArgs([
       "--manifest",
@@ -63,7 +63,7 @@ test("LocalEdgeCore_parseCliArgs parses global dry-run manifest flags", () => {
   );
 });
 
-test("LocalEdgeCore_renderCliOutput returns JSON dry-run payload", () => {
+void test("LocalEdgeCore_renderCliOutput returns JSON dry-run payload", () => {
   assert.equal(
     LocalEdgeCore_renderCliOutput({
       dryRun: true,
@@ -83,7 +83,7 @@ test("LocalEdgeCore_renderCliOutput returns JSON dry-run payload", () => {
   );
 });
 
-test("LocalEdgeCore_parseRenderCliArgs preserves render method and check flags", () => {
+void test("LocalEdgeCore_parseRenderCliArgs preserves render method and check flags", () => {
   assert.deepEqual(
     LocalEdgeCore_parseRenderCliArgs({
       args: ["--method", "all", "--dry-run"],

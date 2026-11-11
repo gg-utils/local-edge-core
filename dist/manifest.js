@@ -16,4 +16,3 @@
  * @documentation reviewed=2026-05-23 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 export {};
-//# sourceMappingURL=manifest.js.map

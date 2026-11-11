@@ -244,4 +244,3 @@ export function LocalEdgeCore_buildDockerComposeDownCommand(options) {
 export function LocalEdgeCore_isCustomLoopbackHost(host) {
     return host.startsWith("127.") && host !== "127.0.0.1";
 }
-//# sourceMappingURL=docker-lifecycle.js.map
