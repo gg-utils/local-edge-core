@@ -24,7 +24,7 @@ import {
   LocalEdgeCore_buildHostnamesForSurfaces,
 } from "./hostname.js";
 
-test("LocalEdgeCore_buildHostnameFromParts joins explicit realm parts", () => {
+void test("LocalEdgeCore_buildHostnameFromParts joins explicit realm parts", () => {
   assert.equal(
     LocalEdgeCore_buildHostnameFromParts({
       surface: "www",
@@ -37,7 +37,7 @@ test("LocalEdgeCore_buildHostnameFromParts joins explicit realm parts", () => {
   );
 });
 
-test("LocalEdgeCore_buildHostnamesForSurfaces builds a generic matrix", () => {
+void test("LocalEdgeCore_buildHostnamesForSurfaces builds a generic matrix", () => {
   assert.deepEqual(
     LocalEdgeCore_buildHostnamesForSurfaces({
       surfaces: ["www", "api"],
@@ -53,7 +53,7 @@ test("LocalEdgeCore_buildHostnamesForSurfaces builds a generic matrix", () => {
   );
 });
 
-test("LocalEdgeCore_buildHostnameFromParts rejects empty labels", () => {
+void test("LocalEdgeCore_buildHostnameFromParts rejects empty labels", () => {
   assert.throws(
     () =>
       LocalEdgeCore_buildHostnameFromParts({

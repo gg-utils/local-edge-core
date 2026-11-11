@@ -30,7 +30,7 @@ import {
   LocalEdgeCore_resolveTlsKeyPath,
 } from "./paths.js";
 
-test("LocalEdgeCore_normalizeMachineRootDir accepts legacy generated path", () => {
+void test("LocalEdgeCore_normalizeMachineRootDir accepts legacy generated path", () => {
   assert.equal(
     LocalEdgeCore_normalizeMachineRootDir(
       path.join("/tmp", "example", ".tmp", "local-edge", "generated"),
@@ -39,7 +39,7 @@ test("LocalEdgeCore_normalizeMachineRootDir accepts legacy generated path", () =
   );
 });
 
-test("LocalEdgeCore_normalizeLegacyArtifactPath remaps legacy nginx and cert paths", () => {
+void test("LocalEdgeCore_normalizeLegacyArtifactPath remaps legacy nginx and cert paths", () => {
   const machineRootDir = path.join("/tmp", "example", ".tmp", "local-edge");
 
   assert.equal(
@@ -87,7 +87,7 @@ test("LocalEdgeCore_normalizeLegacyArtifactPath remaps legacy nginx and cert pat
   );
 });
 
-test("LocalEdgeCore TLS path helpers resolve default and legacy override paths", () => {
+void test("LocalEdgeCore TLS path helpers resolve default and legacy override paths", () => {
   const machineRootDir = path.join("/tmp", "example", ".tmp", "local-edge");
 
   assert.equal(
@@ -118,7 +118,7 @@ test("LocalEdgeCore TLS path helpers resolve default and legacy override paths",
   );
 });
 
-test("LocalEdgeCore_resolveRealmArtifactPaths derives generic realm files", () => {
+void test("LocalEdgeCore_resolveRealmArtifactPaths derives generic realm files", () => {
   const realmsDir = path.join(
     "/tmp",
     "example",
@@ -141,7 +141,7 @@ test("LocalEdgeCore_resolveRealmArtifactPaths derives generic realm files", () =
   );
 });
 
-test("LocalEdgeCore env source path helpers default and de-duplicate active files", () => {
+void test("LocalEdgeCore env source path helpers default and de-duplicate active files", () => {
   assert.equal(
     LocalEdgeCore_defaultEnvFilePath({
       projectRoot: "/tmp/example",

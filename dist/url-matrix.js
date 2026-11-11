@@ -22,6 +22,8 @@ export function LocalEdgeCore_parseUrlMatrixCliArgs(options) {
     let requestedMethod = options.defaultMethod;
     for (let index = 0; index < options.args.length; index += 1) {
         const argument = options.args[index];
+        if (argument === undefined)
+            continue;
         if (argument === "--method") {
             const value = options.args[index + 1] ?? "";
             if (value.length === 0) {
@@ -89,4 +91,3 @@ export function LocalEdgeCore_buildUrlMatrixLines(options) {
     }
     return lines;
 }
-//# sourceMappingURL=url-matrix.js.map

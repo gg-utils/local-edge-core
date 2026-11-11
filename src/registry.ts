@@ -55,8 +55,8 @@ export type LocalEdgeCore_RealmUpstream = {
 /** Filesystem artifact paths attached to a neutral realm record. */
 export type LocalEdgeCore_RealmRegistryArtifactPaths = {
   realmRoot: string;
-  metadataPath?: string;
-  envDir?: string;
+  metadataPath?: string | undefined;
+  envDir?: string | undefined;
 };
 
 /** ISO timestamp fields tracking neutral realm lifecycle. */

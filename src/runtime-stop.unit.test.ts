@@ -53,14 +53,14 @@ function makeWriter(): { messages: string[]; writer: { write(message: string): u
   };
 }
 
-test("LocalEdgeCore_runtimeStopParsePidLines filters non-decimal lines", () => {
+void test("LocalEdgeCore_runtimeStopParsePidLines filters non-decimal lines", () => {
   assert.deepEqual(
     LocalEdgeCore_runtimeStopParsePidLines("42\nabc\n 003 \n12x\n\n0\n"),
     [42, 3, 0],
   );
 });
 
-test("LocalEdgeCore_runtimeStopPathIsWithinCheckout rejects sibling prefix collisions", () => {
+void test("LocalEdgeCore_runtimeStopPathIsWithinCheckout rejects sibling prefix collisions", () => {
   assert.equal(
     LocalEdgeCore_runtimeStopPathIsWithinCheckout({ cwd: "/repo", projectRoot: "/repo" }),
     true,
@@ -78,7 +78,7 @@ test("LocalEdgeCore_runtimeStopPathIsWithinCheckout rejects sibling prefix colli
   );
 });
 
-test("LocalEdgeCore_runtimeStopPidIsAlive supports injectable kill and diagnostics", () => {
+void test("LocalEdgeCore_runtimeStopPidIsAlive supports injectable kill and diagnostics", () => {
   const { messages, writer } = makeWriter();
 
   /** Fake kill implementation that treats every probed PID as alive. */
@@ -100,7 +100,7 @@ test("LocalEdgeCore_runtimeStopPidIsAlive supports injectable kill and diagnosti
   assert.match(messages.join(""), /PID 11 check error/);
 });
 
-test("LocalEdgeCore_runtimeStopResolvePidCwd reads lsof cwd records", () => {
+void test("LocalEdgeCore_runtimeStopResolvePidCwd reads lsof cwd records", () => {
   /** Fake lsof runner that returns a cwd record for the requested PID. */
   const spawnSync: LocalEdgeCore_RuntimeStop_SpawnSync = (invocation) => {
     assert.equal(invocation.command, "lsof");
@@ -111,7 +111,7 @@ test("LocalEdgeCore_runtimeStopResolvePidCwd reads lsof cwd records", () => {
   assert.equal(LocalEdgeCore_runtimeStopResolvePidCwd({ pid: 77, spawnSync }), "/tmp/repo");
 });
 
-test("LocalEdgeCore_runtimeStopCollectCheckoutScopedPids deduplicates checkout-scoped pids", () => {
+void test("LocalEdgeCore_runtimeStopCollectCheckoutScopedPids deduplicates checkout-scoped pids", () => {
   const outputs = new Map<string, string>([
     ["alpha", "22\n11\nignored\n"],
     ["beta", "22\n33\n"],
@@ -139,7 +139,7 @@ test("LocalEdgeCore_runtimeStopCollectCheckoutScopedPids deduplicates checkout-s
   );
 });
 
-test("LocalEdgeCore_runtimeStopWaitForPidsExit sleeps until all pids exit or attempts end", () => {
+void test("LocalEdgeCore_runtimeStopWaitForPidsExit sleeps until all pids exit or attempts end", () => {
   let checks = 0;
   let sleeps = 0;
 
@@ -164,7 +164,7 @@ test("LocalEdgeCore_runtimeStopWaitForPidsExit sleeps until all pids exit or att
   assert.equal(sleeps, 2);
 });
 
-test("LocalEdgeCore_runtimeStopTerminatePidList escalates from TERM to KILL", () => {
+void test("LocalEdgeCore_runtimeStopTerminatePidList escalates from TERM to KILL", () => {
   const { messages, writer } = makeWriter();
   const signals: string[] = [];
 
@@ -191,7 +191,7 @@ test("LocalEdgeCore_runtimeStopTerminatePidList escalates from TERM to KILL", ()
   assert.match(messages.join(""), /Remaining PIDs after TERM: 4 5, sending KILL/);
 });
 
-test("LocalEdgeCore_runtimeStopTerminateListenersOnPort parses lsof listener pids", () => {
+void test("LocalEdgeCore_runtimeStopTerminateListenersOnPort parses lsof listener pids", () => {
   const invocations: LocalEdgeCore_RuntimeStop_CommandInvocation[] = [];
 
   /** Fake listener probe that captures the requested lsof invocation. */

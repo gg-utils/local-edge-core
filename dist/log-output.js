@@ -120,4 +120,3 @@ export function LocalEdgeCore_logSection(title, options) {
     LocalEdgeCore_logInfo(title, options);
     LocalEdgeCore_logInfo(divider, options);
 }
-//# sourceMappingURL=log-output.js.map

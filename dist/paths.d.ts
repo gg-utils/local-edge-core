@@ -66,4 +66,3 @@ export declare function LocalEdgeCore_defaultEnvFilePath(options: {
 }): string;
 /** Returns ordered, de-duplicated env file paths for an active local-edge stack. */
 export declare function LocalEdgeCore_collectActiveEnvSourceFiles(options: LocalEdgeCore_CollectActiveEnvSourceFilesOptions): string[];
-//# sourceMappingURL=paths.d.ts.map

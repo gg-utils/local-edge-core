@@ -97,4 +97,3 @@ export declare function LocalEdgeCore_buildLogsHistoryTailArgs(parsed: LocalEdge
 export declare function LocalEdgeCore_buildLogsPathLayout(projectRoot: string): LocalEdgeCore_LogsPathLayout;
 /** Resolves concrete log files for the parsed scope while adapters own file existence checks. */
 export declare function LocalEdgeCore_resolveLogsScopeFiles(options: LocalEdgeCore_ResolveLogsScopeFilesOptions): string[];
-//# sourceMappingURL=logs.d.ts.map

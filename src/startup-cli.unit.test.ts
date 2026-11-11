@@ -33,7 +33,7 @@ import {
   LocalEdgeStartupCli_resolveMethod,
 } from "./startup-cli.js";
 
-test("LocalEdgeStartupCli_parseDoctor preserves method and audit flags", () => {
+void test("LocalEdgeStartupCli_parseDoctor preserves method and audit flags", () => {
   assert.deepEqual(
     LocalEdgeStartupCli_parseDoctor([
       "--method",
@@ -62,7 +62,7 @@ test("LocalEdgeStartupCli_parseDoctor preserves method and audit flags", () => {
   );
 });
 
-test("LocalEdgeStartupCli_parseCommand forwards launch-runtime args", () => {
+void test("LocalEdgeStartupCli_parseCommand forwards launch-runtime args", () => {
   assert.deepEqual(
     LocalEdgeStartupCli_parseCommand("launch-runtime", ["a", "b"]),
     {
@@ -72,7 +72,7 @@ test("LocalEdgeStartupCli_parseCommand forwards launch-runtime args", () => {
   );
 });
 
-test("LocalEdgeStartupCli_parseCommand rejects unknown commands with usage exit", () => {
+void test("LocalEdgeStartupCli_parseCommand rejects unknown commands with usage exit", () => {
   assert.throws(
     () => LocalEdgeStartupCli_parseCommand("unknown", []),
     (error: unknown) =>
@@ -82,7 +82,7 @@ test("LocalEdgeStartupCli_parseCommand rejects unknown commands with usage exit"
   );
 });
 
-test("LocalEdgeStartupCli_applyParsedToEnv projects doctor env flags", () => {
+void test("LocalEdgeStartupCli_applyParsedToEnv projects doctor env flags", () => {
   const env = LocalEdgeStartupCli_applyParsedToEnv({
     command: "doctor",
     methodSource: "cli",
@@ -108,7 +108,7 @@ test("LocalEdgeStartupCli_applyParsedToEnv projects doctor env flags", () => {
   assert.equal(env.LOCAL_EDGE_STARTUP_CLI_DOCTOR_WATCH_APPLICATION, "1");
 });
 
-test("LocalEdgeStartupCli_applyParsedToEnv projects ensure-running realm flags", () => {
+void test("LocalEdgeStartupCli_applyParsedToEnv projects ensure-running realm flags", () => {
   const env = LocalEdgeStartupCli_applyParsedToEnv(
     LocalEdgeStartupCli_parseEnsureRunning([
       "--method",
@@ -126,7 +126,7 @@ test("LocalEdgeStartupCli_applyParsedToEnv projects ensure-running realm flags",
   assert.equal(env.LOCAL_EDGE_STARTUP_CLI_ENSURE_RECREATE, "1");
 });
 
-test("LocalEdgeStartupCli_resolveMethod defaults and all-deprecation match startup policy", () => {
+void test("LocalEdgeStartupCli_resolveMethod defaults and all-deprecation match startup policy", () => {
   assert.deepEqual(
     LocalEdgeStartupCli_resolveMethod({
       parsed: LocalEdgeStartupCli_parseStart([]),
@@ -152,7 +152,7 @@ test("LocalEdgeStartupCli_resolveMethod defaults and all-deprecation match start
   );
 });
 
-test("LocalEdgeStartupCli_applyResolvedMethodToEnv emits stable keys", () => {
+void test("LocalEdgeStartupCli_applyResolvedMethodToEnv emits stable keys", () => {
   const env: Record<string, string> = {};
   LocalEdgeStartupCli_applyResolvedMethodToEnv(
     { method: "nginx-docker", source: "cli", allDeprecationApplied: true },
@@ -166,7 +166,7 @@ test("LocalEdgeStartupCli_applyResolvedMethodToEnv emits stable keys", () => {
   });
 });
 
-test("LocalEdgeStartupCli_resolveImplBaseName maps commands to compatibility impl filenames", () => {
+void test("LocalEdgeStartupCli_resolveImplBaseName maps commands to compatibility impl filenames", () => {
   assert.equal(
     LocalEdgeStartupCli_resolveImplBaseName("doctor"),
     "doctor-impl.ts",
@@ -177,13 +177,13 @@ test("LocalEdgeStartupCli_resolveImplBaseName maps commands to compatibility imp
   );
 });
 
-test("LocalEdgeStartupCli_renderUsage renders caller supplied invocation", () => {
+void test("LocalEdgeStartupCli_renderUsage renders caller supplied invocation", () => {
   const usage = LocalEdgeStartupCli_renderUsage({ invocation: "local-edge" });
   assert.match(usage, /^Usage: local-edge run <command>/);
   assert.match(usage, /ensure-running/);
 });
 
-test("LocalEdgeStartupCli_buildImplSpawnPlan creates env and argv for TypeScript impls", () => {
+void test("LocalEdgeStartupCli_buildImplSpawnPlan creates env and argv for TypeScript impls", () => {
   const plan = LocalEdgeStartupCli_buildImplSpawnPlan({
     implBaseName: "doctor-impl.ts",
     implPath: "/adapter/doctor-impl.ts",
@@ -199,7 +199,7 @@ test("LocalEdgeStartupCli_buildImplSpawnPlan creates env and argv for TypeScript
   assert.equal(plan.deprecationWarningLine, null);
 });
 
-test("LocalEdgeStartupCli_buildImplSpawnPlan creates shell plans and all deprecation warnings", () => {
+void test("LocalEdgeStartupCli_buildImplSpawnPlan creates shell plans and all deprecation warnings", () => {
   const plan = LocalEdgeStartupCli_buildImplSpawnPlan({
     implBaseName: "canonical-start.impl.sh",
     implPath: "/adapter/canonical-start.impl.sh",

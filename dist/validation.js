@@ -80,4 +80,3 @@ export function LocalEdgeCore_extractCommandBin(command) {
     const firstToken = trimmed.split(/\s/)[0] ?? "";
     return firstToken.replace(/['"]/g, "");
 }
-//# sourceMappingURL=validation.js.map

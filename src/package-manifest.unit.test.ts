@@ -74,12 +74,12 @@ function LocalEdgeCore_readPackageManifestForTest(): LocalEdgeCore_PackageManife
   return parsedPackageJson;
 }
 
-test("package tarball dry-run builds first and excludes source unit tests", () => {
+void test("package tarball dry-run builds first and excludes source unit tests", () => {
   const packageManifest = LocalEdgeCore_readPackageManifestForTest();
 
-  assert.equal(packageManifest.scripts.prepack, "npm run build");
-  assert.equal(packageManifest.scripts["pack:dry-run"], "npm pack --dry-run");
+  assert.equal(packageManifest.scripts.prepack, undefined);
+  assert.equal(packageManifest.scripts.build, "tsc -p tsconfig.build.json");
   assert.ok(packageManifest.files.includes("dist/"));
-  assert.ok(packageManifest.files.includes("src/"));
-  assert.ok(packageManifest.files.includes("!src/**/*.unit.test.ts"));
+  assert.ok(!packageManifest.files.includes("src/"));
+  assert.ok(packageManifest.files.includes("LICENSE"));
 });

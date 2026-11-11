@@ -68,7 +68,7 @@ export declare function LocalEdgeCore_validateRequestedMethod(options: {
     commandLabel: string;
     method: string;
     supportedMethods: readonly string[];
-}): "all" | string;
+}): string;
 /** Resolves and validates a local-edge method CSV without reading process env. */
 export declare function LocalEdgeCore_resolveConfiguredMethods(options: {
     rawMethodsCsv: string | undefined;
@@ -141,4 +141,3 @@ export declare function LocalEdgeCore_resolveNginxDockerStopCommand(options: {
     projectName: string;
     composePath: string;
 }): string;
-//# sourceMappingURL=method-config.d.ts.map

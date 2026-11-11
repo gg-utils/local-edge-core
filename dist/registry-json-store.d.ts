@@ -71,4 +71,3 @@ export declare function LocalEdgeCore_withRegistryJsonLock<TRegistry, TResult>(o
     store: LocalEdgeCore_RegistryJsonStoreOptions<TRegistry>;
     operation: (registry: TRegistry) => Promise<TResult>;
 }): Promise<TResult>;
-//# sourceMappingURL=registry-json-store.d.ts.map

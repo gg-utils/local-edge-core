@@ -294,4 +294,3 @@ export function LocalEdgeCore_resolveTailnetSuffix(configuredValue, dependencies
     }
     return "gannet-frog.ts.net";
 }
-//# sourceMappingURL=tls.js.map

@@ -74,4 +74,3 @@ export declare function LocalEdgeCore_withLogsResolveFormatterStateTsv(env: {
 }): string;
 /** Parses the with-logs argv slice into a discriminated command union. */
 export declare function LocalEdgeCore_withLogsParseArgv(argv: readonly string[]): LocalEdgeCore_WithLogsParseResult;
-//# sourceMappingURL=with-logs.d.ts.map

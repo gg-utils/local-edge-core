@@ -42,4 +42,3 @@ export declare function LocalEdgeCore_assertUniquePorts(entries: readonly {
     name: string;
     port: number;
 }[]): void;
-//# sourceMappingURL=config-primitives.d.ts.map

@@ -55,4 +55,3 @@ export declare function LocalEdgeCore_yesNo(options: LocalEdgeCore_YesNoOptions)
  * The helper is intentionally explicit and host-mutating only after the yes/no prompt accepts.
  */
 export declare function LocalEdgeCore_installHomebrewFormula(options: LocalEdgeCore_InstallHomebrewFormulaOptions): Promise<boolean>;
-//# sourceMappingURL=prompt.d.ts.map

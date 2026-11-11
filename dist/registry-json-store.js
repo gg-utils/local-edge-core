@@ -121,4 +121,3 @@ export async function LocalEdgeCore_withRegistryJsonLock(options) {
         await LocalEdgeCore_releaseRegistryJsonLock(options.store);
     }
 }
-//# sourceMappingURL=registry-json-store.js.map

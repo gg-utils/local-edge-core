@@ -62,7 +62,7 @@ export function LocalEdgeCore_isTcpPortListening(
 /** Returns true when a TCP listener is active on `port`, optionally scoped to `host`. */
 export function LocalEdgeCore_isPortListening(options: {
   port: number;
-  host?: string;
+  host?: string | undefined;
 }): boolean {
   const { port, host } = options;
 
@@ -87,7 +87,7 @@ export function LocalEdgeCore_isPortListening(options: {
 export function LocalEdgeCore_waitForPort(options: {
   port: number;
   timeoutSeconds: number;
-  host?: string;
+  host?: string | undefined;
 }): boolean {
   const deadline = Date.now() + options.timeoutSeconds * 1000;
 
@@ -116,7 +116,7 @@ export function LocalEdgeCore_waitForPort(options: {
 export function LocalEdgeCore_waitForPortClosed(options: {
   port: number;
   timeoutSeconds: number;
-  host?: string;
+  host?: string | undefined;
 }): boolean {
   const deadline = Date.now() + options.timeoutSeconds * 1000;
 

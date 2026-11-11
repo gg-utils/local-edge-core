@@ -173,4 +173,3 @@ export function LocalEdgeCore_createRealmRegistryFile(options) {
         realms,
     };
 }
-//# sourceMappingURL=registry.js.map

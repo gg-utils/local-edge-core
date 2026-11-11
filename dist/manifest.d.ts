@@ -95,4 +95,3 @@ export type LocalEdgeCore_AdapterHookResult<T> = {
     message: string;
     recoveryHint?: string;
 };
-//# sourceMappingURL=manifest.d.ts.map

@@ -121,4 +121,3 @@ export declare function LocalEdgeCore_doctorFormatMissingWorkspaceRegistryLine(r
 export declare function LocalEdgeCore_doctorVerifyWorkspaceRegistrationPayload(options: LocalEdgeCore_DoctorVerifyWorkspaceRegistrationPayloadOptions): LocalEdgeCore_DoctorVerifyWorkspaceRegistrationResult;
 /** Confirms a workspace has a matching realm row in the registry file. */
 export declare function LocalEdgeCore_doctorVerifyWorkspaceRegistration(options: LocalEdgeCore_DoctorVerifyWorkspaceRegistrationOptions): LocalEdgeCore_DoctorVerifyWorkspaceRegistrationResult;
-//# sourceMappingURL=doctor.d.ts.map

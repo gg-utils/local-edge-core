@@ -155,6 +155,7 @@ function LocalEdgeCore_withLogsParseSingleRequiredFlag(options: {
   let value = "";
   for (let index = 0; index < options.rest.length; index += 1) {
     const token = options.rest[index];
+    if (token === undefined) continue;
     if (token === options.flag) {
       value = options.rest[index + 1] ?? "";
       index += 1;

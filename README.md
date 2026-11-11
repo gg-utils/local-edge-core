@@ -128,3 +128,11 @@ The extracted scripts currently expect the source-first workspace toolchain.
 - Host mutations are planned through neutral helpers; adapters perform actual privileged actions.
 - Keep project route catalogs, root zones, env defaults, and process commands outside this package.
 - Some exports target source-first consumption through TypeScript source paths.
+
+## Use from another repository
+
+Requires Node `>=22.0.0 <27`. Add this dependency; built JavaScript and declarations are included, with no install build step:
+
+```json
+"@gg-utils/local-edge-core": "git+https://github.com/gg-utils/local-edge-core.git#v0.2.0"
+```

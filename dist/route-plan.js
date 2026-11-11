@@ -66,4 +66,3 @@ export function LocalEdgeCore_buildManifestRoutePlan(options) {
         surfaces,
     };
 }
-//# sourceMappingURL=route-plan.js.map

@@ -34,26 +34,26 @@ import {
   LocalEdgeCore_writeArtifact,
 } from "./system.js";
 
-test("LocalEdgeCore_isMacos reflects the Node platform", () => {
+void test("LocalEdgeCore_isMacos reflects the Node platform", () => {
   assert.equal(LocalEdgeCore_isMacos(), process.platform === "darwin");
 });
 
-test("LocalEdgeCore_resolveCommandPath and commandExists handle empty and known commands", () => {
+void test("LocalEdgeCore_resolveCommandPath and commandExists handle empty and known commands", () => {
   assert.equal(LocalEdgeCore_resolveCommandPath(""), null);
   assert.equal(LocalEdgeCore_commandExists(""), false);
   assert.equal(LocalEdgeCore_commandExists("node"), true);
   assert.match(LocalEdgeCore_resolveCommandPath("node") ?? "", /node/);
 });
 
-test("LocalEdgeCore_hasInteractiveTerminal returns a boolean", () => {
+void test("LocalEdgeCore_hasInteractiveTerminal returns a boolean", () => {
   assert.equal(typeof LocalEdgeCore_hasInteractiveTerminal(), "boolean");
 });
 
-test("LocalEdgeCore_canonicalPath resolves an existing path", () => {
+void test("LocalEdgeCore_canonicalPath resolves an existing path", () => {
   assert.equal(LocalEdgeCore_canonicalPath(process.cwd()), fs.realpathSync(process.cwd()));
 });
 
-test("LocalEdgeCore_writeArtifact creates the artifact directory and file", () => {
+void test("LocalEdgeCore_writeArtifact creates the artifact directory and file", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "local-edge-system-"));
   try {
     const artifactsDir = path.join(tempDir, "artifacts");
@@ -68,7 +68,7 @@ test("LocalEdgeCore_writeArtifact creates the artifact directory and file", () =
   }
 });
 
-test("LocalEdgeCore_requireUtility reports known and missing utilities", () => {
+void test("LocalEdgeCore_requireUtility reports known and missing utilities", () => {
   assert.equal(LocalEdgeCore_requireUtility({ utility: "node" }).ok, true);
   const missing = LocalEdgeCore_requireUtility({
     utility: "local-edge-definitely-missing-command",

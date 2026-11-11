@@ -58,18 +58,18 @@ function buildRealmRecord(): LocalEdgeCore_RealmRecord {
   };
 }
 
-test("LocalEdgeCore_validateRealmStatus accepts known lifecycle states", () => {
+void test("LocalEdgeCore_validateRealmStatus accepts known lifecycle states", () => {
   assert.equal(LocalEdgeCore_validateRealmStatus("active"), "active");
   assert.equal(LocalEdgeCore_validateRealmStatus("inactive"), "inactive");
   assert.equal(LocalEdgeCore_validateRealmStatus("stale"), "stale");
   assert.throws(() => LocalEdgeCore_validateRealmStatus("unknown"), /unsupported-realm-status/);
 });
 
-test("LocalEdgeCore_validateRealmRecord validates neutral realm records", () => {
+void test("LocalEdgeCore_validateRealmRecord validates neutral realm records", () => {
   assert.deepEqual(LocalEdgeCore_validateRealmRecord(buildRealmRecord()), buildRealmRecord());
 });
 
-test("LocalEdgeCore_validateRealmRecord rejects invalid upstream ports", () => {
+void test("LocalEdgeCore_validateRealmRecord rejects invalid upstream ports", () => {
   const record = buildRealmRecord();
   record.upstreams.web = { host: "127.0.0.1", port: 0 };
 
@@ -79,7 +79,7 @@ test("LocalEdgeCore_validateRealmRecord rejects invalid upstream ports", () => {
   );
 });
 
-test("LocalEdgeCore_createRealmRegistryFile indexes records by slug", () => {
+void test("LocalEdgeCore_createRealmRegistryFile indexes records by slug", () => {
   assert.deepEqual(
     LocalEdgeCore_createRealmRegistryFile({
       updatedAt: "2026-05-19T00:03:00.000Z",

@@ -225,4 +225,3 @@ export function LocalEdgeCore_resolveNginxDockerStopCommand(options) {
         composePath: options.composePath,
     });
 }
-//# sourceMappingURL=method-config.js.map

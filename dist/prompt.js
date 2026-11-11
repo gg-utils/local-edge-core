@@ -95,4 +95,3 @@ export async function LocalEdgeCore_installHomebrewFormula(options) {
     const result = dependencies.runCommand("brew", ["install", options.formula], 120_000);
     return result.status === 0;
 }
-//# sourceMappingURL=prompt.js.map

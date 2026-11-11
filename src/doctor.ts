@@ -260,6 +260,8 @@ export function LocalEdgeCore_doctorSummarizeRenderArtifactPayload(
   const generatedRaw = isRecord ? payload.generatedFiles : undefined;
 
   return {
+    // Preserve legacy coercion for render artifacts from older producers.
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     runAtDisplay: String(runAtRaw ?? "unknown"),
     realmsJoined: Array.isArray(realmsRaw) ? realmsRaw.join(",") : "",
     generatedFileCount: Array.isArray(generatedRaw) ? generatedRaw.length : 0,

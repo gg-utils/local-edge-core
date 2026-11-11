@@ -15,4 +15,3 @@
  */
 export * from "../nginx.js";
 export * from "../docker-lifecycle.js";
-//# sourceMappingURL=nginx-docker.d.ts.map

@@ -56,7 +56,7 @@ import type {
   LocalEdgeCore_DockerLifecycleCommandRunner,
 } from "./docker-lifecycle.js";
 
-test("LocalEdgeCore Docker command builders render lifecycle args", () => {
+void test("LocalEdgeCore Docker command builders render lifecycle args", () => {
   assert.deepEqual(LocalEdgeCore_buildDockerInfoArgs(), ["info"]);
   assert.deepEqual(
     LocalEdgeCore_buildDockerComposePsArgs({
@@ -97,7 +97,7 @@ test("LocalEdgeCore Docker command builders render lifecycle args", () => {
   ]);
 });
 
-test("LocalEdgeCore Docker parsers preserve legacy trim semantics", () => {
+void test("LocalEdgeCore Docker parsers preserve legacy trim semantics", () => {
   assert.equal(LocalEdgeCore_parseDockerComposePsContainerId("\nabc\n"), "abc");
   assert.equal(LocalEdgeCore_parseDockerComposePsContainerId("\n"), null);
   assert.equal(LocalEdgeCore_parseDockerRunningState("true\n"), true);
@@ -108,7 +108,7 @@ test("LocalEdgeCore Docker parsers preserve legacy trim semantics", () => {
   );
 });
 
-test("LocalEdgeCore Docker lifecycle runners sequence daemon/container/reload probes", () => {
+void test("LocalEdgeCore Docker lifecycle runners sequence daemon/container/reload probes", () => {
   const calls: LocalEdgeCore_DockerLifecycleCommandInvocation[] = [];
 
   /** Fake Docker runner that records command plans and returns happy-path outputs. */
@@ -182,7 +182,7 @@ test("LocalEdgeCore Docker lifecycle runners sequence daemon/container/reload pr
   );
 });
 
-test("LocalEdgeCore Docker lifecycle runners preserve failed-probe fallbacks", () => {
+void test("LocalEdgeCore Docker lifecycle runners preserve failed-probe fallbacks", () => {
   /** Fake Docker runner that simulates command failure for every invocation. */
   const failedRunner: LocalEdgeCore_DockerLifecycleCommandRunner = () => ({
     status: 1,
@@ -215,7 +215,7 @@ test("LocalEdgeCore Docker lifecycle runners preserve failed-probe fallbacks", (
   );
 });
 
-test("LocalEdgeCore mount helpers compare container mounts", () => {
+void test("LocalEdgeCore mount helpers compare container mounts", () => {
   const expectedMounts = [
     {
       destinationPath: "/etc/nginx/nginx.conf",
@@ -284,7 +284,7 @@ test("LocalEdgeCore mount helpers compare container mounts", () => {
   );
 });
 
-test("LocalEdgeCore mount helpers inspect sources and compare runtime artifacts", () => {
+void test("LocalEdgeCore mount helpers inspect sources and compare runtime artifacts", () => {
   /** Fake Docker runner that returns a mount source only for the nginx config destination. */
   const runDockerCommand: LocalEdgeCore_DockerLifecycleCommandRunner = (invocation) => {
     const destinationPath = String(invocation.args[2] ?? "");
@@ -321,7 +321,7 @@ test("LocalEdgeCore mount helpers inspect sources and compare runtime artifacts"
   );
 });
 
-test("LocalEdgeCore host and shell command planners resolve legacy values", () => {
+void test("LocalEdgeCore host and shell command planners resolve legacy values", () => {
   assert.equal(
     LocalEdgeCore_resolveDockerDesktopAppPath({
       homeDir: "/Users/demo",
@@ -374,7 +374,7 @@ test("LocalEdgeCore host and shell command planners resolve legacy values", () =
   assert.equal(LocalEdgeCore_isCustomLoopbackHost("127.0.0.1"), false);
 });
 
-test("LocalEdgeCore_waitForRuntimeReady polls until success and performs final check", () => {
+void test("LocalEdgeCore_waitForRuntimeReady polls until success and performs final check", () => {
   let now = 0;
   let checks = 0;
   let sleeps = 0;

@@ -171,4 +171,3 @@ export declare function LocalEdgeCore_buildDockerComposeDownCommand(options: {
 }): string;
 /** Returns whether a listen host requires a non-default 127/8 loopback alias. */
 export declare function LocalEdgeCore_isCustomLoopbackHost(host: string): boolean;
-//# sourceMappingURL=docker-lifecycle.d.ts.map

@@ -151,4 +151,3 @@ ${labels}
 ${volumeMounts}
 `;
 }
-//# sourceMappingURL=nginx.js.map

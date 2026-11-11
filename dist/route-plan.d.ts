@@ -42,4 +42,3 @@ export type LocalEdgeCore_BuildManifestRoutePlanOptions = {
 };
 /** Converts a product-neutral manifest and realm record into a deterministic route plan. */
 export declare function LocalEdgeCore_buildManifestRoutePlan(options: LocalEdgeCore_BuildManifestRoutePlanOptions): LocalEdgeCore_RoutePlan;
-//# sourceMappingURL=route-plan.d.ts.map

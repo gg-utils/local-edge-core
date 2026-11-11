@@ -71,7 +71,7 @@ function buildRealmRecord(): LocalEdgeCore_RealmRecord {
   };
 }
 
-test("LocalEdgeCore_buildManifestRoutePlan resolves hostnames and runtime upstreams", () => {
+void test("LocalEdgeCore_buildManifestRoutePlan resolves hostnames and runtime upstreams", () => {
   assert.deepEqual(
     LocalEdgeCore_buildManifestRoutePlan({
       manifest: buildManifest(),
@@ -97,9 +97,11 @@ test("LocalEdgeCore_buildManifestRoutePlan resolves hostnames and runtime upstre
   );
 });
 
-test("LocalEdgeCore_buildManifestRoutePlan rejects unknown manifest upstream ids", () => {
+void test("LocalEdgeCore_buildManifestRoutePlan rejects unknown manifest upstream ids", () => {
   const manifest = buildManifest();
-  manifest.surfaces = [{ ...manifest.surfaces[0], upstreamId: "missing" }];
+  const first = manifest.surfaces[0];
+  assert.ok(first);
+  manifest.surfaces = [{ ...first, upstreamId: "missing" }];
 
   assert.throws(
     () =>
@@ -111,7 +113,7 @@ test("LocalEdgeCore_buildManifestRoutePlan rejects unknown manifest upstream ids
   );
 });
 
-test("LocalEdgeCore_buildManifestRoutePlan rejects missing realm upstreams", () => {
+void test("LocalEdgeCore_buildManifestRoutePlan rejects missing realm upstreams", () => {
   const realmRecord = buildRealmRecord();
   realmRecord.upstreams = {};
 

@@ -39,7 +39,7 @@ import {
   LocalEdgeCore_doctorVerifyWorkspaceRegistrationPayload,
 } from "./doctor.js";
 
-test("LocalEdgeCore_doctorRenderUsage includes every supported doctor subcommand", () => {
+void test("LocalEdgeCore_doctorRenderUsage includes every supported doctor subcommand", () => {
   const usage = LocalEdgeCore_doctorRenderUsage();
 
   assert.match(usage, /^Usage: doctor-core\.ts <command> \[options\]/);
@@ -52,7 +52,7 @@ test("LocalEdgeCore_doctorRenderUsage includes every supported doctor subcommand
   assert.match(usage, /print-tls-wildcards --path <registry\.json>/);
 });
 
-test("LocalEdgeCore_doctorParseArgv parses help aliases", () => {
+void test("LocalEdgeCore_doctorParseArgv parses help aliases", () => {
   assert.deepEqual(LocalEdgeCore_doctorParseArgv([]), { command: "help" });
   assert.deepEqual(LocalEdgeCore_doctorParseArgv(["--help"]), {
     command: "help",
@@ -60,7 +60,7 @@ test("LocalEdgeCore_doctorParseArgv parses help aliases", () => {
   assert.deepEqual(LocalEdgeCore_doctorParseArgv(["-h"]), { command: "help" });
 });
 
-test("LocalEdgeCore_doctorParseArgv parses registry, render, TLS, and workspace commands", () => {
+void test("LocalEdgeCore_doctorParseArgv parses registry, render, TLS, and workspace commands", () => {
   assert.deepEqual(
     LocalEdgeCore_doctorParseArgv(["print-registry-line", "--path", "r.json"]),
     {
@@ -105,7 +105,7 @@ test("LocalEdgeCore_doctorParseArgv parses registry, render, TLS, and workspace 
   );
 });
 
-test("LocalEdgeCore_doctorParseArgv preserves legacy missing-value and unknown-command errors", () => {
+void test("LocalEdgeCore_doctorParseArgv preserves legacy missing-value and unknown-command errors", () => {
   assert.throws(
     () => LocalEdgeCore_doctorParseArgv(["print-registry-line"]),
     (error: unknown) =>
@@ -131,7 +131,7 @@ test("LocalEdgeCore_doctorParseArgv preserves legacy missing-value and unknown-c
   );
 });
 
-test("LocalEdgeCore_doctorSummarizeRegistryPayload formats typical registry counts", () => {
+void test("LocalEdgeCore_doctorSummarizeRegistryPayload formats typical registry counts", () => {
   const payload = LocalEdgeCore_doctorParseJsonText(`{
     "schemaVersion": 1,
     "realms": {
@@ -160,7 +160,7 @@ test("LocalEdgeCore_doctorSummarizeRegistryPayload formats typical registry coun
   );
 });
 
-test("LocalEdgeCore_doctorSummarizeRegistryPayload preserves undefined schema coercion", () => {
+void test("LocalEdgeCore_doctorSummarizeRegistryPayload preserves undefined schema coercion", () => {
   const payload = LocalEdgeCore_doctorParseJsonText(`{}`);
   const summary = LocalEdgeCore_doctorSummarizeRegistryPayload(payload);
 
@@ -171,14 +171,14 @@ test("LocalEdgeCore_doctorSummarizeRegistryPayload preserves undefined schema co
   );
 });
 
-test("LocalEdgeCore_doctorRealmValuesFromPayload keeps Object.values array semantics", () => {
+void test("LocalEdgeCore_doctorRealmValuesFromPayload keeps Object.values array semantics", () => {
   const payload = LocalEdgeCore_doctorParseJsonText(`{"realms":["skip"]}`);
   assert.deepEqual(LocalEdgeCore_doctorRealmValuesFromPayload(payload), [
     "skip",
   ]);
 });
 
-test("LocalEdgeCore_doctorSummarizeRenderArtifactPayload formats missing values", () => {
+void test("LocalEdgeCore_doctorSummarizeRenderArtifactPayload formats missing values", () => {
   const payload = LocalEdgeCore_doctorParseJsonText(`{"generatedFiles":[]}`);
   const summary = LocalEdgeCore_doctorSummarizeRenderArtifactPayload(payload);
 
@@ -188,7 +188,7 @@ test("LocalEdgeCore_doctorSummarizeRenderArtifactPayload formats missing values"
   );
 });
 
-test("LocalEdgeCore_doctorSummarizeRenderArtifactPayload preserves blank runAt", () => {
+void test("LocalEdgeCore_doctorSummarizeRenderArtifactPayload preserves blank runAt", () => {
   const payload = LocalEdgeCore_doctorParseJsonText(
     `{"runAt":"","realms":["a"],"generatedFiles":["/x"]}`,
   );
@@ -200,7 +200,7 @@ test("LocalEdgeCore_doctorSummarizeRenderArtifactPayload preserves blank runAt",
   );
 });
 
-test("LocalEdgeCore_doctorCollectActiveRealmTlsWildcards emits only complete active rows", () => {
+void test("LocalEdgeCore_doctorCollectActiveRealmTlsWildcards emits only complete active rows", () => {
   const payload = LocalEdgeCore_doctorParseJsonText(`{
     "realms": {
       "a": {
@@ -233,7 +233,7 @@ test("LocalEdgeCore_doctorCollectActiveRealmTlsWildcards emits only complete act
   );
 });
 
-test("LocalEdgeCore_doctorVerifyWorkspaceRegistration reports a missing registry", () => {
+void test("LocalEdgeCore_doctorVerifyWorkspaceRegistration reports a missing registry", () => {
   const tmpDir = fs.mkdtempSync(
     path.join(os.tmpdir(), "local-edge-core-doctor-"),
   );
@@ -259,7 +259,7 @@ test("LocalEdgeCore_doctorVerifyWorkspaceRegistration reports a missing registry
   }
 });
 
-test("LocalEdgeCore_doctorFormatMissingWorkspaceRegistryLine formats missing registry errors", () => {
+void test("LocalEdgeCore_doctorFormatMissingWorkspaceRegistryLine formats missing registry errors", () => {
   assert.equal(
     LocalEdgeCore_doctorFormatMissingWorkspaceRegistryLine(
       "/tmp/registry.json",
@@ -268,7 +268,7 @@ test("LocalEdgeCore_doctorFormatMissingWorkspaceRegistryLine formats missing reg
   );
 });
 
-test("LocalEdgeCore_doctorVerifyWorkspaceRegistration reports not_registered", () => {
+void test("LocalEdgeCore_doctorVerifyWorkspaceRegistration reports not_registered", () => {
   const tmpDir = fs.mkdtempSync(
     path.join(os.tmpdir(), "local-edge-core-doctor-"),
   );
@@ -307,7 +307,7 @@ test("LocalEdgeCore_doctorVerifyWorkspaceRegistration reports not_registered", (
   }
 });
 
-test("LocalEdgeCore_doctorVerifyWorkspaceRegistrationPayload checks parsed registry payloads", () => {
+void test("LocalEdgeCore_doctorVerifyWorkspaceRegistrationPayload checks parsed registry payloads", () => {
   const payload = {
     schemaVersion: 1,
     realms: {
@@ -335,7 +335,7 @@ test("LocalEdgeCore_doctorVerifyWorkspaceRegistrationPayload checks parsed regis
   }
 });
 
-test("LocalEdgeCore_doctorVerifyWorkspaceRegistration confirms a matching row", () => {
+void test("LocalEdgeCore_doctorVerifyWorkspaceRegistration confirms a matching row", () => {
   const tmpDir = fs.mkdtempSync(
     path.join(os.tmpdir(), "local-edge-core-doctor-"),
   );

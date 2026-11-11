@@ -287,8 +287,8 @@ function LocalEdgeCore_createDefaultLogsCliState(
   options: LocalEdgeCore_ParseLogsCliOptions,
 ): LocalEdgeCore_MutableParsedLogsCli {
   return {
-    command: "tail" as LocalEdgeCore_LogsCommandName,
-    scope: "run" as LocalEdgeCore_LogsScopeName,
+    command: "tail",
+    scope: "run",
     runIndex: "1",
     initialLines: options.defaultLines,
     initialChars: "",

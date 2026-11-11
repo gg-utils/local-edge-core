@@ -76,7 +76,7 @@ function buildTempStoreOptions(
   };
 }
 
-test("LocalEdgeCore_readRegistryJsonStore returns an empty registry when absent", async () => {
+void test("LocalEdgeCore_readRegistryJsonStore returns an empty registry when absent", async () => {
   const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "local-edge-core-registry-"));
   const store = buildTempStoreOptions(rootDir);
 
@@ -87,7 +87,7 @@ test("LocalEdgeCore_readRegistryJsonStore returns an empty registry when absent"
   });
 });
 
-test("LocalEdgeCore_writeRegistryJsonStore validates and writes atomically", async () => {
+void test("LocalEdgeCore_writeRegistryJsonStore validates and writes atomically", async () => {
   const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "local-edge-core-registry-write-"));
   const store = buildTempStoreOptions(rootDir);
 
@@ -109,13 +109,14 @@ test("LocalEdgeCore_writeRegistryJsonStore validates and writes atomically", asy
   });
 });
 
-test("LocalEdgeCore_withRegistryJsonLock mutates and releases locks", async () => {
+void test("LocalEdgeCore_withRegistryJsonLock mutates and releases locks", async () => {
   const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "local-edge-core-registry-lock-"));
   const store = buildTempStoreOptions(rootDir);
 
   const result = await LocalEdgeCore_withRegistryJsonLock({
     store,
     operation: async (registry) => {
+      await Promise.resolve();
       registry.realms.demo = { realmSlug: "demo" };
       return "ok";
     },
@@ -128,7 +129,7 @@ test("LocalEdgeCore_withRegistryJsonLock mutates and releases locks", async () =
   await assert.rejects(() => fs.access(store.registryLockFilePath), /ENOENT/);
 });
 
-test("LocalEdgeCore_withRegistryJsonLock releases locks when operations fail", async () => {
+void test("LocalEdgeCore_withRegistryJsonLock releases locks when operations fail", async () => {
   const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "local-edge-core-registry-error-"));
   const store = buildTempStoreOptions(rootDir);
 
@@ -137,6 +138,7 @@ test("LocalEdgeCore_withRegistryJsonLock releases locks when operations fail", a
       LocalEdgeCore_withRegistryJsonLock({
         store,
         operation: async () => {
+          await Promise.resolve();
           throw new Error("operation-failed");
         },
       }),

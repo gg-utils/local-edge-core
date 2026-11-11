@@ -170,4 +170,3 @@ export function LocalEdgeCore_legacyProxyConflictPresent(options) {
         host: options.host,
     });
 }
-//# sourceMappingURL=network.js.map

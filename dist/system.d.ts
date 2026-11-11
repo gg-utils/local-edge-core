@@ -33,4 +33,3 @@ export declare function LocalEdgeCore_writeArtifact(options: {
 export declare function LocalEdgeCore_requireUtility(options: {
     utility: string;
 }): LocalEdgeCore_ValidationResult;
-//# sourceMappingURL=system.d.ts.map
