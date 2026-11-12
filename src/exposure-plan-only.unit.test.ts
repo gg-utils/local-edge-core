@@ -21,7 +21,7 @@ import {
 
 const manifest: LocalEdgeCore_ExposureManifest = {
   protectedPorts: [443],
-  rootZone: "dev.example.internal",
+  rootZone: "dev.example.test",
   apps: [
     { id: "auth", enabled: true, localPort: 4300, edgePort: 8451 },
     { id: "later", enabled: false, localPort: 3300 },

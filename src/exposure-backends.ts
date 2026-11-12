@@ -54,7 +54,17 @@ export type LocalEdgeCore_ExposureBackendName = (typeof LOCAL_EDGE_CORE_EXPOSURE
 export const LOCAL_EDGE_CORE_DEFAULT_EXPOSURE_BACKEND: LocalEdgeCore_ExposureBackendName =
   LOCAL_EDGE_CORE_TAILSCALE_SERVE_PORTS_BACKEND;
 
-/** True when `name` is a registered backend name. */
+/**
+ * True when `name` is a registered backend name.
+ *
+ * @param name - Candidate name, for example from config.
+ * @returns Whether it is one of `LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES`.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_isExposureBackendName("tailscale-serve-ports"); // true
+ * ```
+ */
 export function LocalEdgeCore_isExposureBackendName(
   name: string,
 ): name is LocalEdgeCore_ExposureBackendName {
@@ -63,7 +73,19 @@ export function LocalEdgeCore_isExposureBackendName(
   );
 }
 
-/** Creates a backend by name. Throws for an unknown name so a typo never falls back silently. */
+/**
+ * Creates a backend by name. Throws for an unknown name so a typo never falls back silently.
+ *
+ * @param name - Registered backend name.
+ * @param options - Runner and CLI binary, passed to the backends that use them.
+ * @returns The new backend instance.
+ * @throws For an unknown name, listing the known names.
+ *
+ * @example
+ * ```typescript
+ * const backend = LocalEdgeCore_createExposureBackend(config.backend ?? LOCAL_EDGE_CORE_DEFAULT_EXPOSURE_BACKEND);
+ * ```
+ */
 export function LocalEdgeCore_createExposureBackend(
   name: string,
   options: {
