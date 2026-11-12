@@ -14,7 +14,19 @@
 import { type LocalEdgeCore_ExposureBackend } from "./exposure.js";
 /** Backend name for tailnet services. */
 export declare const LOCAL_EDGE_CORE_TAILSCALE_SERVICES_BACKEND = "tailscale-services";
-/** Creates the plan-only `tailscale-services` backend (`svc:<name>` per app). */
+/**
+ * Creates the plan-only `tailscale-services` backend (`svc:<name>` per app).
+ *
+ * @param options - CLI binary used in the suggested commands.
+ * @returns A backend whose plans hold one `manual` action per enabled app needing a tailnet admin,
+ *   and whose `apply`/`remove` always refuse without running anything.
+ *
+ * @example
+ * ```typescript
+ * const plan = LocalEdgeCore_createTailscaleServicesBackend().plan(manifest);
+ * plan.applicable; // false: the admin runs the steps
+ * ```
+ */
 export declare function LocalEdgeCore_createTailscaleServicesBackend(options?: {
     tailscaleBin?: string | undefined;
 }): LocalEdgeCore_ExposureBackend;

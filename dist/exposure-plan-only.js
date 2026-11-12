@@ -26,10 +26,11 @@ function LocalEdgeCore_createPlanOnlyBackend(options) {
             if (problems.length > 0) {
                 return { ...base, kind: "refuse", reason: `manifest invalid: ${problems.join("; ")}` };
             }
+            const name = app.edgeName ?? app.id;
             return {
                 ...base,
                 kind: "manual",
-                ...builder({ appId: app.id, name: app.edgeName ?? app.id, localPort: app.localPort, manifest }),
+                ...builder({ appId: app.id, name, localPort: app.localPort, manifest }),
             };
         });
         return LocalEdgeCore_buildExposurePlan({
@@ -60,7 +61,19 @@ function LocalEdgeCore_createPlanOnlyBackend(options) {
         })),
     };
 }
-/** Creates the plan-only `tailscale-services` backend (`svc:<name>` per app). */
+/**
+ * Creates the plan-only `tailscale-services` backend (`svc:<name>` per app).
+ *
+ * @param options - CLI binary used in the suggested commands.
+ * @returns A backend whose plans hold one `manual` action per enabled app needing a tailnet admin,
+ *   and whose `apply`/`remove` always refuse without running anything.
+ *
+ * @example
+ * ```typescript
+ * const plan = LocalEdgeCore_createTailscaleServicesBackend().plan(manifest);
+ * plan.applicable; // false: the admin runs the steps
+ * ```
+ */
 export function LocalEdgeCore_createTailscaleServicesBackend(options = {}) {
     const bin = options.tailscaleBin ?? "tailscale";
     return LocalEdgeCore_createPlanOnlyBackend({

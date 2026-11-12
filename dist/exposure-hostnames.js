@@ -31,7 +31,16 @@ export const LOCAL_EDGE_CORE_HOSTNAMES_BACKEND = "hostnames";
 export const LOCAL_EDGE_CORE_HOSTNAMES_DEFAULT_TEMPLATE = "{label}.{projectMachine}.{rootZone}";
 /** Default wildcard template. */
 export const LOCAL_EDGE_CORE_HOSTNAMES_DEFAULT_WILDCARD = "*.{projectMachine}.{rootZone}";
-/** Default probe: `stat` the folder and walk up looking for a `.git` entry. Reads only. */
+/**
+ * Default probe: `stat` the folder and walk up looking for a `.git` entry. Reads only.
+ *
+ * @param dir - Folder to inspect.
+ * @returns Whether it exists, its permission bits, and the nearest enclosing folder holding `.git`.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_inspectPrivateDir("/srv/edge/tls"); // { exists: true, mode: 0o700, gitRoot: null }
+ * ```
+ */
 export const LocalEdgeCore_inspectPrivateDir = (dir) => {
     let mode;
     try {
@@ -62,7 +71,19 @@ function LocalEdgeCore_hostnameParts(settings, app) {
         rootZone: settings.rootZone,
     };
 }
-/** Builds the host for one app: config function, then template, then the compact default. */
+/**
+ * Builds the host for one app: config function, then template, then the compact default.
+ *
+ * @param settings - Hostname settings.
+ * @param app - App name (its `edgeName` or id).
+ * @param appTemplate - Per-app template that wins over the settings.
+ * @returns The host, not yet validated.
+ * @throws When the compact label cannot be built (invalid, too long, or a two-character app in a non-main realm).
+ * @example
+ * ```typescript
+ * LocalEdgeCore_buildExposureHostname({ ...settings, realm: "pr-7" }, "web"); // "web--pr-7.proj-node1.example.test"
+ * ```
+ */
 export function LocalEdgeCore_buildExposureHostname(settings, app, appTemplate) {
     const parts = LocalEdgeCore_hostnameParts(settings, app);
     if (appTemplate !== undefined) {
@@ -73,7 +94,16 @@ export function LocalEdgeCore_buildExposureHostname(settings, app, appTemplate) 
     }
     return LocalEdgeCore_renderHostnameTemplate(settings.hostnameTemplate ?? LOCAL_EDGE_CORE_HOSTNAMES_DEFAULT_TEMPLATE, parts);
 }
-/** Builds the wildcard every host must sit directly under, for example `*.proj-m1.example.test`. */
+/**
+ * Builds the wildcard every host must sit directly under, for example `*.proj-node1.example.test`.
+ *
+ * @param settings - Hostname settings.
+ * @returns `wildcardTemplate` (default `*.{projectMachine}.{rootZone}`) with its tokens filled; not validated.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_buildExposureHostnamesWildcard(settings); // "*.proj-node1.example.test"
+ * ```
+ */
 export function LocalEdgeCore_buildExposureHostnamesWildcard(settings) {
     return (settings.wildcardTemplate ?? LOCAL_EDGE_CORE_HOSTNAMES_DEFAULT_WILDCARD)
         .replace("{projectMachine}", settings.projectMachineLabel)
@@ -83,26 +113,76 @@ export function LocalEdgeCore_buildExposureHostnamesWildcard(settings) {
 function LocalEdgeCore_fillWildcardTemplate(settings, template) {
     return template.replace("{projectMachine}", settings.projectMachineLabel).replace("{rootZone}", settings.rootZone);
 }
-/** Every wildcard hosts may sit under: the main one first, then `extraWildcardTemplates`. */
+/**
+ * Every wildcard hosts may sit under: the main one first, then `extraWildcardTemplates`.
+ *
+ * @param settings - Hostname settings.
+ * @returns The main wildcard followed by each filled `extraWildcardTemplates` entry.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_buildExposureHostnamesWildcards({ ...settings, extraWildcardTemplates: ["*.node1.{rootZone}"] });
+ * // ["*.proj-node1.example.test", "*.node1.example.test"]
+ * ```
+ */
 export function LocalEdgeCore_buildExposureHostnamesWildcards(settings) {
     return [
         LocalEdgeCore_buildExposureHostnamesWildcard(settings),
         ...(settings.extraWildcardTemplates ?? []).map((template) => LocalEdgeCore_fillWildcardTemplate(settings, template)),
     ];
 }
-/** nginx regex `map` key matching every SNI name under a zone, for example `~\.example\.test$`. */
+/**
+ * nginx regex `map` key matching every SNI name under a zone, for example `~\.example\.test$`.
+ *
+ * @param rootZone - Zone whose names should match.
+ * @returns A `~`-prefixed regex with regex metacharacters escaped.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_sniZoneSuffixPattern("example.test"); // "~\\.example\\.test$"
+ * ```
+ */
 export function LocalEdgeCore_sniZoneSuffixPattern(rootZone) {
     return `~\\.${rootZone.replace(/[.\\^$|?*+()[\]{}]/g, (c) => `\\${c}`)}$`;
 }
-/** Edge URL for a host behind the router port. */
+/**
+ * Edge URL for a host behind the router port.
+ *
+ * @param host - Host name.
+ * @param port - Client-facing port; 443 is left out of the URL.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_hostnamesEdgeUrl("web.proj-node1.example.test", 8460); // "https://web.proj-node1.example.test:8460"
+ * ```
+ */
 export function LocalEdgeCore_hostnamesEdgeUrl(host, port) {
     return port === 443 ? `https://${host}` : `https://${host}:${String(port)}`;
 }
-/** The host of one app: its exact `host`, else its own pattern, else the settings' pattern. */
+/**
+ * The host of one app: its exact `host`, else its own pattern, else the settings' pattern.
+ *
+ * @param settings - Hostname settings.
+ * @param app - The app's id, edge name, own pattern and exact host.
+ * @returns The host the router serves the app under.
+ * @throws When a pattern cannot be built.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_exposureAppHost(settings, { id: "play", host: "play.node1.example.test" }); // "play.node1.example.test"
+ * ```
+ */
 export function LocalEdgeCore_exposureAppHost(settings, app) {
     return app.host ?? LocalEdgeCore_buildExposureHostname(settings, app.edgeName ?? app.id, app.hostnameTemplate);
 }
-/** Lists the enabled apps with their hosts. Throws when a name cannot be built. */
+/**
+ * Lists the enabled apps with their hosts. Throws when a name cannot be built.
+ *
+ * @param manifest - Manifest whose enabled apps are listed.
+ * @param settings - Hostname settings.
+ * @returns One entry per enabled app with its host, loopback port and extra locations.
+ * @throws When a host cannot be built; validate first to get problems instead.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_listExposureHostnames(manifest, settings).map((entry) => entry.host);
+ * ```
+ */
 export function LocalEdgeCore_listExposureHostnames(manifest, settings) {
     return manifest.apps
         .filter((app) => app.enabled)
@@ -118,7 +198,58 @@ export function LocalEdgeCore_listExposureHostnames(manifest, settings) {
         };
     });
 }
-/** Problems with paths in the settings that must be absolute. */
+/**
+ * Characters nginx reads as syntax in an unquoted directive argument: whitespace (including
+ * newlines), quotes, `;`, `{`, `}`, `#` (comment), `$` (variable), `\\` (escape), and controls.
+ */
+const LOCAL_EDGE_CORE_NGINX_UNSAFE_ARGUMENT = /[\s"'`;{}#$\\\u0000-\u001f\u007f]/;
+/**
+ * The one check every path written into the router config goes through: the path must be
+ * absolute and free of any character nginx would read as syntax. No quoting is attempted, so a
+ * rejected path can never be smuggled in through escaping.
+ *
+ * @param field - Config field name used in the message, for example `hostnames.nginx.pidPath`.
+ * @param value - Path from config.
+ * @returns `null` when the path is safe to write unquoted, otherwise the problem.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_nginxPathProblem("hostnames.nginx.pidPath", "/srv/edge/nginx.pid"); // null
+ * LocalEdgeCore_nginxPathProblem("hostnames.nginx.pidPath", "/srv/x.pid;\nuser root"); // problem text
+ * ```
+ */
+export function LocalEdgeCore_nginxPathProblem(field, value) {
+    if (typeof value !== "string" || !path.isAbsolute(value)) {
+        return `${field} must be an absolute path`;
+    }
+    if (LOCAL_EDGE_CORE_NGINX_UNSAFE_ARGUMENT.test(value)) {
+        return `${field} ${JSON.stringify(value)} has a character nginx reads as syntax (whitespace, a quote, ; { } # $ \\ or a control character)`;
+    }
+    return null;
+}
+/**
+ * Returns `value` for writing into the router config, or throws. Every rendered path directive
+ * (`pid`, `error_log`, `include`, `access_log`, `*_temp_path`, `ssl_certificate*`) uses it, so
+ * the renderer stays safe even when called without validation.
+ *
+ * @param field - Config field name used in the error.
+ * @param value - Path from config.
+ * @returns The unchanged path.
+ * @throws `local-edge-core-nginx-unsafe-path` when `LocalEdgeCore_nginxPathProblem` reports a problem.
+ *
+ * @example
+ * ```typescript
+ * `pid ${LocalEdgeCore_nginxPathArgument("hostnames.nginx.pidPath", nginx.pidPath)};`;
+ * ```
+ */
+export function LocalEdgeCore_nginxPathArgument(field, value) {
+    const problem = LocalEdgeCore_nginxPathProblem(field, value);
+    if (problem !== null) {
+        throw new Error(`local-edge-core-nginx-unsafe-path: ${problem}`);
+    }
+    return value;
+}
+/** Problems with paths in the settings: each must be absolute and safe to write into nginx config. */
 function LocalEdgeCore_pathProblems(settings) {
     const paths = [
         ["tls.certPath", settings.tls.certPath],
@@ -131,14 +262,24 @@ function LocalEdgeCore_pathProblems(settings) {
         ["nginx.mimeTypesPath", settings.nginx.mimeTypesPath],
         ["acme.dataDir", settings.acme?.dataDir],
     ];
-    return paths
-        .filter(([, value]) => value !== undefined && !path.isAbsolute(value))
-        .map(([field]) => `hostnames.${field} must be an absolute path`);
+    return paths.flatMap(([field, value]) => {
+        if (value === undefined) {
+            return [];
+        }
+        const problem = LocalEdgeCore_nginxPathProblem(`hostnames.${field}`, value);
+        return problem === null ? [] : [problem];
+    });
 }
 /**
- * Validates the hostname settings and every app name: DNS labels, one host per app, each host
- * directly under the wildcard, loopback router on a valid unprotected port, absolute paths.
+ * Validates the hostname settings and every app name: DNS labels and 253-character names, one host per app, each host
+ * directly under the wildcard, loopback router and client edge port on valid unprotected ports, and absolute paths free of nginx syntax characters.
  * Returns problems; empty means valid.
+ *
+ * @example
+ * ```typescript
+ * const problems = LocalEdgeCore_validateExposureHostnames(manifest);
+ * if (problems.length > 0) throw new Error(problems.join("; "));
+ * ```
  */
 export function LocalEdgeCore_validateExposureHostnames(manifest) {
     const settings = manifest.hostnames;
@@ -165,6 +306,18 @@ export function LocalEdgeCore_validateExposureHostnames(manifest) {
     }
     else if (manifest.protectedPorts.includes(settings.routerPort)) {
         problems.push(`hostnames.routerPort ${String(settings.routerPort)} is protected`);
+    }
+    if (settings.edgePort !== undefined) {
+        if (!LocalEdgeCore_exposureIsPort(settings.edgePort)) {
+            problems.push(`hostnames.edgePort ${String(settings.edgePort)} is not a valid TCP port`);
+        }
+        else if (manifest.protectedPorts.includes(settings.edgePort)) {
+            problems.push(`hostnames.edgePort ${String(settings.edgePort)} is protected`);
+        }
+    }
+    const workers = settings.nginx.workerConnections;
+    if (workers !== undefined && !(Number.isInteger(workers) && workers >= 1 && workers <= 1_048_576)) {
+        problems.push(`hostnames.nginx.workerConnections ${String(workers)} is not a positive integer`);
     }
     problems.push(...LocalEdgeCore_pathProblems(settings));
     if (settings.acme && LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES[settings.acme.dnsProvider] === undefined) {
@@ -208,6 +361,13 @@ export function LocalEdgeCore_validateExposureHostnames(manifest) {
                 problems.push(`${app.id}: location ${location.path} port ${String(location.localPort)} is not a valid upstream port`);
             }
         }
+        if (app.host !== undefined) {
+            const hostProblem = LocalEdgeCore_nginxValueProblem(`${app.id}: host`, "host", app.host);
+            if (hostProblem !== null) {
+                problems.push(hostProblem);
+                continue;
+            }
+        }
         let host;
         try {
             host = LocalEdgeCore_exposureAppHost(settings, app);
@@ -229,14 +389,77 @@ export function LocalEdgeCore_validateExposureHostnames(manifest) {
     }
     return problems;
 }
-/** Checks proxy overrides: a plain `Host` value and an nginx time. */
+/** Shapes the non-path values written into the router config must have. */
+const LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES = {
+    host: { pattern: /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/, text: "a lowercase DNS name" },
+    upstreamHost: {
+        pattern: /^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\])(?::\d{1,5})?$/,
+        text: "a host or host:port",
+    },
+    readTimeout: { pattern: /^\d{1,7}(?:ms|s|m|h)?$/, text: "an nginx time such as 300s" },
+};
+/**
+ * The one check every non-path value written into the router config goes through (an exact
+ * `host`, `upstreamHost`, `readTimeout`): it must be a string with no character nginx reads as
+ * syntax, and it must have the value's shape. No quoting is attempted.
+ *
+ * @param field - Field name used in the message, for example `play: location / upstreamHost`.
+ * @param kind - Which value this is.
+ * @param value - Value from config.
+ * @returns `null` when the value is safe to write unquoted, otherwise the problem.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_nginxValueProblem("play: location / readTimeout", "readTimeout", "3600s"); // null
+ * LocalEdgeCore_nginxValueProblem("play: location / upstreamHost", "upstreamHost", "a;\nuser root"); // problem text
+ * ```
+ */
+export function LocalEdgeCore_nginxValueProblem(field, kind, value) {
+    if (typeof value !== "string" || value.length === 0) {
+        return `${field} must be a non-empty string`;
+    }
+    if (LOCAL_EDGE_CORE_NGINX_UNSAFE_ARGUMENT.test(value)) {
+        return `${field} ${JSON.stringify(value)} has a character nginx reads as syntax (whitespace, a quote, ; { } # $ \\ or a control character)`;
+    }
+    const shape = LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES[kind];
+    if (!shape.pattern.test(value)) {
+        return `${field} ${JSON.stringify(value)} must be ${shape.text}`;
+    }
+    return null;
+}
+/**
+ * Returns `value` for writing into the router config, or throws, so the renderer stays safe even
+ * when called without validation.
+ *
+ * @param field - Field name used in the error.
+ * @param kind - Which value this is.
+ * @param value - Value from config.
+ * @returns The unchanged value.
+ * @throws `local-edge-core-nginx-unsafe-value` when `LocalEdgeCore_nginxValueProblem` reports a problem.
+ * @example
+ * ```typescript
+ * `proxy_read_timeout ${LocalEdgeCore_nginxValueArgument("play: location / readTimeout", "readTimeout", "3600s")};`;
+ * ```
+ */
+export function LocalEdgeCore_nginxValueArgument(field, kind, value) {
+    const problem = LocalEdgeCore_nginxValueProblem(field, kind, value);
+    if (problem !== null) {
+        throw new Error(`local-edge-core-nginx-unsafe-value: ${problem}`);
+    }
+    return value;
+}
+/** Checks proxy overrides through the shared value check. */
 function LocalEdgeCore_proxyOptionProblems(label, options) {
     const problems = [];
-    if (options.upstreamHost !== undefined && !/^[A-Za-z0-9.-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:]+\](:\d{1,5})?$/.test(options.upstreamHost)) {
-        problems.push(`${label} upstreamHost "${options.upstreamHost}" must be a host or host:port`);
+    for (const kind of ["upstreamHost", "readTimeout"]) {
+        if (options[kind] !== undefined) {
+            const problem = LocalEdgeCore_nginxValueProblem(`${label} ${kind}`, kind, options[kind]);
+            if (problem !== null) {
+                problems.push(problem);
+            }
+        }
     }
-    if (options.readTimeout !== undefined && !/^\d+(ms|s|m|h)?$/.test(options.readTimeout)) {
-        problems.push(`${label} readTimeout "${options.readTimeout}" is not an nginx time`);
+    if (options.buffering !== undefined && typeof options.buffering !== "boolean") {
+        problems.push(`${label} buffering must be true or false`);
     }
     return problems;
 }
@@ -244,7 +467,16 @@ function LocalEdgeCore_proxyOptionProblems(label, options) {
 function LocalEdgeCore_clientEdgePort(settings) {
     return settings.edgePort ?? settings.routerPort;
 }
-/** The router's HTTP listeners. Omitted in config: one TLS listener on `routerPort`. */
+/**
+ * The router's HTTP listeners. Omitted in config: one TLS listener on `routerPort`.
+ *
+ * @param settings - Hostname settings.
+ * @returns Each listener with `ssl` (default true) and `clientPort` (default `edgePort` for `routerPort`, else its own port) filled.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_routerListeners({ ...settings, edgePort: 8470 }); // [{ port: 8460, ssl: true, clientPort: 8470 }]
+ * ```
+ */
 export function LocalEdgeCore_routerListeners(settings) {
     const listeners = settings.listeners ?? [{ port: settings.routerPort }];
     return listeners.map((listener) => ({
@@ -408,14 +640,14 @@ function LocalEdgeCore_renderHostLocation(options) {
     return `    location ${options.path} {
       proxy_pass http://${LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST}:${String(options.localPort)}${options.upstreamPath};
       proxy_http_version 1.1;
-      proxy_set_header Host ${options.proxy.upstreamHost ?? "$host"};
+      proxy_set_header Host ${options.proxy.upstreamHost === undefined ? "$host" : LocalEdgeCore_nginxValueArgument(`location ${options.path} upstreamHost`, "upstreamHost", options.proxy.upstreamHost)};
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_set_header X-Forwarded-Proto https;
       proxy_set_header X-Forwarded-Host ${options.forwardedHost};
       proxy_set_header X-Forwarded-Port ${options.forwardedPort};
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Connection $local_edge_connection_upgrade;${buffering}
-      proxy_read_timeout ${options.proxy.readTimeout ?? "300s"};
+      proxy_read_timeout ${options.proxy.readTimeout === undefined ? "300s" : LocalEdgeCore_nginxValueArgument(`location ${options.path} readTimeout`, "readTimeout", options.proxy.readTimeout)};
     }`;
 }
 /**
@@ -449,7 +681,7 @@ function LocalEdgeCore_renderHostServerBlock(settings, entry) {
     return `  server {
 ${listens.join("\n")}
     http2 on;
-    server_name ${entry.host};
+    server_name ${LocalEdgeCore_nginxValueArgument(`${entry.appId}: host`, "host", entry.host)};
 ${locations.join("\n")}
   }`;
 }
@@ -469,31 +701,42 @@ function LocalEdgeCore_requireValidHostnames(manifest) {
  * stream router, the certificate at http level, a default server on every listener that answers
  * 421 for unknown names, and one SNI server block per enabled app. Pure and deterministic, so a supervisor can compare it with the file on disk.
  * Throws when the settings or names are invalid.
+ *
+ * @param manifest - Manifest with `hostnames` settings.
+ * @returns The complete `nginx.conf` text.
+ * @throws `local-edge-core-hostnames-invalid` with every problem when validation fails; every path is
+ *   also re-checked by `LocalEdgeCore_nginxPathArgument` while rendering.
+ * @example
+ * ```typescript
+ * const text = LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest);
+ * if (text !== fs.readFileSync(confPath, "utf8")) { writeAndTest(text); } // write it, then nginx -t
+ * ```
  */
 export function LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest) {
     const settings = LocalEdgeCore_requireValidHostnames(manifest);
     const { nginx } = settings;
     const listeners = LocalEdgeCore_routerListeners(settings);
-    const temp = (directive, name) => `  ${directive}_temp_path ${path.join(nginx.tempDir, name)};`;
+    const arg = LocalEdgeCore_nginxPathArgument;
+    const temp = (directive, name) => `  ${directive}_temp_path ${arg("hostnames.nginx.tempDir", path.join(nginx.tempDir, name))};`;
     return [
         "# Generated by the local-edge hostnames backend. Do not edit: changes are overwritten.",
         "worker_processes 1;",
-        `pid ${nginx.pidPath};`,
-        `error_log ${nginx.errorLogPath} warn;`,
+        `pid ${arg("hostnames.nginx.pidPath", nginx.pidPath)};`,
+        `error_log ${arg("hostnames.nginx.errorLogPath", nginx.errorLogPath)} warn;`,
         `events { worker_connections ${String(nginx.workerConnections ?? 512)}; }`,
         ...LocalEdgeCore_renderStreamBlock(settings),
         "http {",
-        ...(nginx.mimeTypesPath === undefined ? [] : [`  include ${nginx.mimeTypesPath};`]),
+        ...(nginx.mimeTypesPath === undefined ? [] : [`  include ${arg("hostnames.nginx.mimeTypesPath", nginx.mimeTypesPath)};`]),
         "  default_type application/octet-stream;",
-        `  access_log ${nginx.accessLogPath};`,
+        `  access_log ${arg("hostnames.nginx.accessLogPath", nginx.accessLogPath)};`,
         temp("client_body", "body"),
         temp("proxy", "proxy"),
         temp("fastcgi", "fcgi"),
         temp("uwsgi", "uwsgi"),
         temp("scgi", "scgi"),
         "  server_names_hash_bucket_size 128;",
-        `  ssl_certificate ${settings.tls.certPath};`,
-        `  ssl_certificate_key ${settings.tls.keyPath};`,
+        `  ssl_certificate ${arg("hostnames.tls.certPath", settings.tls.certPath)};`,
+        `  ssl_certificate_key ${arg("hostnames.tls.keyPath", settings.tls.keyPath)};`,
         "  ssl_protocols TLSv1.2 TLSv1.3;",
         "  map $http_upgrade $local_edge_connection_upgrade { default upgrade; '' close; }",
         ...LocalEdgeCore_forwardedValues(listeners).maps,
@@ -503,7 +746,17 @@ export function LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest) {
         "",
     ].join("\n");
 }
-/** Reads the node's tailnet addresses from `tailscale status --json`. Read-only. */
+/**
+ * Reads the node's tailnet addresses from `tailscale status --json`. Read-only.
+ *
+ * @param runner - Command runner (tests pass a fake).
+ * @param tailscaleBin - CLI binary.
+ * @returns The first IPv4 and IPv6 of `Self.TailscaleIPs`; `{}` when the command fails or its output is unreadable.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_readTailnetAddresses(LocalEdgeCore_exposureDefaultCommandRunner, "tailscale"); // { ipv4: "192.0.2.9" }
+ * ```
+ */
 export function LocalEdgeCore_readTailnetAddresses(runner, tailscaleBin) {
     try {
         const result = runner(tailscaleBin, ["status", "--json"]);
@@ -521,7 +774,16 @@ export function LocalEdgeCore_readTailnetAddresses(runner, tailscaleBin) {
         return {};
     }
 }
-/** Lists why a folder is not private (0700) and outside any git checkout. Empty means fine. */
+/**
+ * Lists why a folder is not private (0700) and outside any git checkout. Empty means fine.
+ *
+ * @param dir - Folder to check.
+ * @param probe - Folder probe; `LocalEdgeCore_inspectPrivateDir` reads the real file system.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_privateDirProblems("/srv/edge/tls", LocalEdgeCore_inspectPrivateDir); // [] when 0700 and outside git
+ * ```
+ */
 export function LocalEdgeCore_privateDirProblems(dir, probe) {
     const seen = probe(dir);
     const problems = [];
@@ -536,7 +798,19 @@ export function LocalEdgeCore_privateDirProblems(dir, probe) {
     }
     return problems;
 }
-/** Builds every planned action for the hostname backend. Reads only (status JSON, folder modes). */
+/**
+ * Builds every planned action for the hostname backend. Reads only (status JSON, folder modes).
+ *
+ * @param manifest - Manifest with `hostnames` settings.
+ * @param options - Runner, binaries and folder probe.
+ * @returns One `refuse` per enabled app (and nothing else) when validation fails; otherwise one
+ *   `manual` server-block action per enabled app followed by the router, TLS, ACME, DNS, stream
+ *   and tailnet steps. Runs `tailscale status --json` only when `addresses` is not configured.
+ * @example
+ * ```typescript
+ * for (const action of LocalEdgeCore_planExposureHostnames(manifest)) console.log(action.appId, action.kind);
+ * ```
+ */
 export function LocalEdgeCore_planExposureHostnames(manifest, options = {}) {
     let settings;
     try {
@@ -689,6 +963,15 @@ export function LocalEdgeCore_planExposureHostnames(manifest, options = {}) {
  * Observes the Serve TCP mapping in front of the router, read-only, from `serve status --json`:
  * `exposed` when the edge port forwards to the router, `missing` when the port is unmapped, and
  * `conflict` when it is mapped to anything else.
+ *
+ * @param settings - Hostname settings.
+ * @param runner - Command runner.
+ * @param tailscaleBin - CLI binary.
+ * @returns `unknown` when status cannot be read, otherwise `exposed`, `missing` or `conflict` with a note.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_observeHostnamesServeTcp(settings, runner, "tailscale").state; // "exposed" | "missing" | ...
+ * ```
  */
 export function LocalEdgeCore_observeHostnamesServeTcp(settings, runner, tailscaleBin) {
     const edgePort = String(LocalEdgeCore_clientEdgePort(settings));
@@ -715,7 +998,18 @@ export function LocalEdgeCore_observeHostnamesServeTcp(settings, runner, tailsca
     const observed = typeof entry.TCPForward === "string" ? `tcp://${entry.TCPForward}` : entry.HTTPS === true ? "https" : null;
     return { state: "conflict", observed, note: `serve :${edgePort} is mapped to something else` };
 }
-/** Creates the plan-only `hostnames` backend. `apply()` and `remove()` always refuse. */
+/**
+ * Creates the plan-only `hostnames` backend. `apply()` and `remove()` always refuse.
+ *
+ * @param options - Runner, binaries and folder probe, passed to the planner and status.
+ * @returns A backend whose `plan` lists the steps, whose `planRemove` tells the operator to disable
+ *   apps in config, whose `status` reads the Serve TCP mapping, and whose `apply`/`remove` refuse.
+ * @example
+ * ```typescript
+ * const backend = LocalEdgeCore_createHostnamesBackend();
+ * process.stdout.write(LocalEdgeCore_renderExposurePlanText(backend.plan(manifest)));
+ * ```
+ */
 export function LocalEdgeCore_createHostnamesBackend(options = {}) {
     const name = LOCAL_EDGE_CORE_HOSTNAMES_BACKEND;
     const build = (manifest) => LocalEdgeCore_buildExposurePlan({

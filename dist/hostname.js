@@ -70,6 +70,12 @@ export const LOCAL_EDGE_CORE_COMPACT_REALM_SEPARATOR = "--";
  * Checks one DNS label: lowercase `a-z`, `0-9` and `-` only, 1 to 63 characters, no leading or
  * trailing `-`, and no `--` at positions 3-4 (reserved for IDN prefixes such as `xn--`).
  * Returns a problem description, or null when the label is valid.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_checkDnsLabel("web"); // null
+ * LocalEdgeCore_checkDnsLabel("ab--x"); // "label \"ab--x\" may not have -- at positions 3-4"
+ * ```
  */
 export function LocalEdgeCore_checkDnsLabel(label) {
     if (label.length === 0) {
@@ -89,22 +95,47 @@ export function LocalEdgeCore_checkDnsLabel(label) {
     }
     return null;
 }
-/** Checks every label of a hostname. A leading `*` label (wildcard) is allowed. */
+/** Longest DNS name in presentation form (no trailing dot), per RFC 1035. */
+export const LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH = 253;
+/**
+ * Checks every label of a hostname and its total length. A leading `*` label (wildcard) is allowed.
+ *
+ * @param hostname - Dotted name without a trailing dot, for example a root zone, wildcard or host.
+ * @returns One problem per invalid label, plus one when the whole name is longer than 253
+ *   characters; empty means valid. Never throws.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_checkHostnameLabels("*.proj-node1.example.test"); // []
+ * LocalEdgeCore_checkHostnameLabels("a.*.example"); // one problem: "*" is only allowed first
+ * ```
+ */
 export function LocalEdgeCore_checkHostnameLabels(hostname) {
     const labels = hostname.split(".");
-    return labels.flatMap((label, index) => {
-        if (index === 0 && label === "*") {
-            return [];
-        }
-        const problem = LocalEdgeCore_checkDnsLabel(label);
-        return problem === null ? [] : [`${hostname}: ${problem}`];
-    });
+    const lengthProblems = hostname.length > LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH
+        ? [`${hostname.slice(0, 40)}...: name is ${String(hostname.length)} characters, longer than ${String(LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH)}`]
+        : [];
+    return [...lengthProblems, ...labels.flatMap((label, index) => {
+            if (index === 0 && label === "*") {
+                return [];
+            }
+            const problem = LocalEdgeCore_checkDnsLabel(label);
+            return problem === null ? [] : [`${hostname}: ${problem}`];
+        })];
 }
 /**
  * Sanitizes a branch or worktree name into a realm slug: lowercase, every run of other
  * characters becomes one `-`, no leading or trailing `-`, and never `--` (so the compact
  * separator stays unambiguous). When longer than `maxLength`, the slug is cut and a 6-character
  * hash of the original name is appended so distinct long branches stay distinct.
+ *
+ * @param rawBranch - Branch or worktree name.
+ * @param options - `maxLength`, default 63.
+ * @returns The slug; may be empty when the name has no letters or digits.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_sanitizeRealmSlug("Feat/Login__Page"); // "feat-login-page"
+ * ```
  */
 export function LocalEdgeCore_sanitizeRealmSlug(rawBranch, options = {}) {
     const maxLength = options.maxLength ?? LOCAL_EDGE_CORE_DNS_LABEL_MAX_LENGTH;
@@ -123,7 +154,16 @@ export function LocalEdgeCore_sanitizeRealmSlug(rawBranch, options = {}) {
  * Builds the leftmost label of a compact hostname: `<app>` for the main realm, otherwise
  * `<app>--<realm>`, shortening the realm (with a hash) so the label fits in 63 characters.
  *
- * @throws When the app label is invalid or too long to leave room for a realm.
+ * @throws When the app label is invalid or too long to leave room for a realm, or when a
+ *   two-character app is used in a non-main realm: `ab--<realm>` would put `--` at positions 3-4,
+ *   which DNS reserves for IDN prefixes. Give such an app an `edgeName` of 1 or 3+ characters, or a
+ *   `hostnameTemplate`.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_buildCompactLeftLabel({ app: "web", realm: "Feat/X", projectMachineLabel: "proj-node1", rootZone: "example.test" });
+ * // "web--feat-x"
+ * ```
  */
 export function LocalEdgeCore_buildCompactLeftLabel(parts) {
     const appProblem = LocalEdgeCore_checkDnsLabel(parts.app);
@@ -140,6 +180,10 @@ export function LocalEdgeCore_buildCompactLeftLabel(parts) {
     if (realm === (parts.mainRealm ?? "main")) {
         return parts.app;
     }
+    if (parts.app.length === 2) {
+        throw new Error(`local-edge-core-hostname-short-app: "${parts.app}--<realm>" would put -- at positions 3-4, which DNS reserves for IDN prefixes; ` +
+            "give the app an edgeName of 1 or 3+ characters, or a hostnameTemplate, for non-main realms");
+    }
     const room = LOCAL_EDGE_CORE_DNS_LABEL_MAX_LENGTH - parts.app.length - LOCAL_EDGE_CORE_COMPACT_REALM_SEPARATOR.length;
     if (room < 8) {
         throw new Error(`local-edge-core-hostname-app-too-long: "${parts.app}" leaves no room for a realm`);
@@ -151,6 +195,12 @@ export function LocalEdgeCore_buildCompactLeftLabel(parts) {
  * `<app>--<realm>.<projectMachine>.<rootZone>`, so one wildcard `*.<projectMachine>.<rootZone>` covers every app and realm.
  *
  * @throws When any label is invalid.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_buildCompactHostname({ app: "web", realm: "main", projectMachineLabel: "proj-node1", rootZone: "example.test" });
+ * // "web.proj-node1.example.test"
+ * ```
  */
 export function LocalEdgeCore_buildCompactHostname(parts) {
     const hostname = `${LocalEdgeCore_buildCompactLeftLabel(parts)}.${parts.projectMachineLabel}.${parts.rootZone}`;
@@ -163,6 +213,15 @@ export function LocalEdgeCore_buildCompactHostname(parts) {
 /**
  * Fills a hostname template. Tokens: `{app}`, `{realm}`, `{label}` (the compact leftmost label),
  * `{projectMachine}` and `{rootZone}`. Unknown tokens are left in place so validation rejects them.
+ *
+ * @param template - Template text.
+ * @param parts - App, realm and zone parts.
+ * @returns The filled template; not validated.
+ * @throws When `{label}` is used and the compact label cannot be built.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_renderHostnameTemplate("{app}.{projectMachine}.{rootZone}", parts); // "web.proj-node1.example.test"
+ * ```
  */
 export function LocalEdgeCore_renderHostnameTemplate(template, parts) {
     const tokens = {
