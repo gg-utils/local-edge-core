@@ -136,6 +136,22 @@
       "types": "./dist/with-logs.d.ts",
       "default": "./dist/with-logs.js"
     },
+    "./exposure": {
+      "types": "./dist/exposure-backends.d.ts",
+      "default": "./dist/exposure-backends.js"
+    },
+    "./exposure-contract": {
+      "types": "./dist/exposure.d.ts",
+      "default": "./dist/exposure.js"
+    },
+    "./exposure-tailscale-serve": {
+      "types": "./dist/exposure-tailscale-serve.d.ts",
+      "default": "./dist/exposure-tailscale-serve.js"
+    },
+    "./exposure-plan-only": {
+      "types": "./dist/exposure-plan-only.d.ts",
+      "default": "./dist/exposure-plan-only.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": {

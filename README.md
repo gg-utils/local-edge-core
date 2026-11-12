@@ -47,6 +47,7 @@ Skip this package when you need a fully wired CLI around a project config; use
 | `@gg-utils/local-edge-core/network` | Listener, loopback, and probe helpers. |
 | `@gg-utils/local-edge-core/healthcheck` | Healthcheck argv, probe, and summary helpers. |
 | `@gg-utils/local-edge-core/cli` | CLI parsing and dry-run output helpers. |
+| `@gg-utils/local-edge-core/exposure` | Switchable exposure backends: `tailscale-serve-ports` (default), plan-only `tailscale-services` and `wildcard-dns-nginx`. |
 
 ## Quick Start
 
@@ -81,6 +82,33 @@ flowchart TD
     E --> F[Adapter executes host mutations]
     F --> G[Core probes status, DNS, TLS, and health]
 ```
+
+## Exposure Backends
+
+An exposure backend makes loopback apps reachable at an edge URL. Pick one by name with
+`LocalEdgeCore_createExposureBackend(name)`; each has `plan`, `planRemove`, `apply`, `remove`
+and `status`.
+
+| Backend | Needs | What it does |
+|---|---|---|
+| `tailscale-serve-ports` (default) | nothing | One tailnet-only HTTPS port per app: `tailscale serve --bg --https=<port> http://127.0.0.1:<localPort>`. |
+| `tailscale-services` | tailnet admin | Plan only: one `svc:<name>` per app. `apply` refuses. |
+| `wildcard-dns-nginx` | DNS and TLS owner | Plan only: `<name>.<rootZone>` server blocks. `apply` refuses. |
+
+Guards in `tailscale-serve-ports`:
+
+- `apply` is a dry run unless called with `{ apply: true }`.
+- Ports in `protectedPorts` are refused for both expose and remove.
+- A port with Funnel on, a TCP forward or more than one handler is never changed.
+- A port mapped to a different target is refused unless the app sets `replaceExistingMapping`.
+- Turn-off (`tailscale serve --https=<port> off`) runs only when the port's single handler is the
+  app's own loopback target.
+- Any refusal in a plan means nothing in that plan is applied.
+- Targets are always `http://127.0.0.1:<port>`; the backend never binds to a tailnet address and
+  never runs `serve reset` or Funnel.
+
+The hostname comes from the manifest, or from `tailscale status --json` (`Self.DNSName`). All host
+commands go through an injectable runner, so tests never call `tailscale`.
 
 ## CLI
 

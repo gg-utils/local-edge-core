@@ -48,3 +48,7 @@ export * from "./tls.js";
 export * from "./url-matrix.js";
 export * from "./validation.js";
 export * from "./with-logs.js";
+export * from "./exposure.js";
+export * from "./exposure-backends.js";
+export * from "./exposure-plan-only.js";
+export * from "./exposure-tailscale-serve.js";
