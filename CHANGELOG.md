@@ -2,8 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- **Exact hosts for name-based backends.** An app may set `host`, which wins over every pattern and the edge name. It must still sit directly under a configured wildcard, and duplicate hosts are refused by name. `LocalEdgeCore_exposureAppHost(settings, app)` returns the host an app gets.
+- **Per-location proxy options** (`LocalEdgeCore_ExposureProxyOptions`). `proxy` on an app applies to `/`, and every extra location takes the same fields. Output for apps that set none of them is unchanged.
+  - `upstreamHost` replaces the `Host` header sent upstream, for dev servers that refuse unknown hosts. It is a DNS name, a dotted-quad IPv4 address or a bracketed IPv6 literal, with an optional port from 1 to 65535, and at most 259 characters (`LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH`). Longer values, empty or leading/trailing-dot labels, labels over 63 characters, out-of-range IPv4 parts and ports outside 1-65535 are refused before rendering.
+  - `buffering: false` renders `proxy_buffering off`, for event streams. It must be a boolean.
+  - `readTimeout` sets `proxy_read_timeout` (an nginx time such as `3600s`, at most 9 characters). The default stays `300s`.
+- **Shared value check.** `LocalEdgeCore_nginxValueProblem` and `LocalEdgeCore_nginxValueArgument` check the exact `host`, `upstreamHost` and `readTimeout` for length, characters nginx reads as syntax, and shape. Validation reports the problem, and render throws `local-edge-core-nginx-unsafe-value`.
+
 ### Changed
 
+- An empty `upstreamPath` on an extra location is now accepted (it was refused before) and passes the request URI through unchanged (`proxy_pass http://127.0.0.1:<port>;` with no URI part).
 - `LocalEdgeCore_resolveTailnetSuffix` now falls back to the reserved placeholder `tailnet.example`, exported as `LOCAL_EDGE_CORE_FALLBACK_TAILNET_SUFFIX`, instead of a hard-coded tailnet name. The return type is unchanged; pass a suffix or rely on detection to get a working value.
 - Test fixtures use reserved documentation names only.
 

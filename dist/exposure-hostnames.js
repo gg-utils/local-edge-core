@@ -21,9 +21,10 @@
  * @documentation reviewed=2026-11-12 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 import fs from "node:fs";
+import { isIPv6 } from "node:net";
 import path from "node:path";
 import { LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST, LocalEdgeCore_buildExposurePlan, LocalEdgeCore_exposureDefaultCommandRunner, LocalEdgeCore_exposureIsPort, LocalEdgeCore_exposureTargetUrl, LocalEdgeCore_refusedExposureApply, LocalEdgeCore_validateExposureManifest, } from "./exposure.js";
-import { LocalEdgeCore_checkDnsLabel, LocalEdgeCore_checkHostnameLabels, LocalEdgeCore_renderHostnameTemplate, LocalEdgeCore_sanitizeRealmSlug, } from "./hostname.js";
+import { LOCAL_EDGE_CORE_DNS_LABEL_MAX_LENGTH, LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH, LocalEdgeCore_checkDnsLabel, LocalEdgeCore_checkHostnameLabels, LocalEdgeCore_renderHostnameTemplate, LocalEdgeCore_sanitizeRealmSlug, } from "./hostname.js";
 import { LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES, LocalEdgeCore_buildLegoDns01Argv } from "./tls.js";
 /** Backend name for SNI-routed hostnames. */
 export const LOCAL_EDGE_CORE_HOSTNAMES_BACKEND = "hostnames";
@@ -389,19 +390,102 @@ export function LocalEdgeCore_validateExposureHostnames(manifest) {
     }
     return problems;
 }
-/** Shapes the non-path values written into the router config must have. */
+/** Highest valid port. */
+const LOCAL_EDGE_CORE_PORT_MAX = 65535;
+/**
+ * Longest `upstreamHost` accepted: a 253-character DNS name, `:` and a 5-digit port. That is 259
+ * characters, far inside the 4096-byte token nginx reads from a config file, so a value that
+ * passes can always be loaded.
+ */
+export const LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH = LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH + 1 + 5;
+/** Longest `readTimeout` accepted: seven digits and a two-letter unit (`ms`). */
+export const LOCAL_EDGE_CORE_NGINX_READ_TIMEOUT_MAX_LENGTH = 9;
+/** One DNS label as written in a `Host` header: letters, digits and `-`, no leading or trailing `-`. */
+const LOCAL_EDGE_CORE_UPSTREAM_LABEL = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/;
+/** Dotted-quad IPv4: four parts, each `0` or 1 to 3 digits without a leading zero, at most 255. */
+function LocalEdgeCore_isIpv4(value) {
+    const parts = value.split(".");
+    return parts.length === 4 && parts.every((part) => /^(?:0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255);
+}
+/**
+ * Checks the host part of an `upstreamHost`: a DNS name (labels of 1 to 63 letters, digits or
+ * `-`, none starting or ending with `-`, no empty label, no leading or trailing dot, at most 253
+ * characters), a dotted-quad IPv4, or an IPv6 literal in brackets. A host made only of digits and
+ * dots must be a valid IPv4, so `256.0.0.1` is refused rather than read as a name. Unlike
+ * `LocalEdgeCore_checkDnsLabel` it accepts upper case and `xn--` labels, which a `Host` header may carry.
+ */
+function LocalEdgeCore_upstreamHostProblem(host) {
+    if (host.startsWith("[")) {
+        const literal = host.slice(1, -1);
+        return host.endsWith("]") && /^[0-9A-Fa-f:.]+$/.test(literal) && isIPv6(literal)
+            ? null
+            : "a valid bracketed IPv6 literal";
+    }
+    if (/^[0-9.]+$/.test(host)) {
+        return LocalEdgeCore_isIpv4(host) ? null : "a valid IPv4 address (four parts, 0-255)";
+    }
+    if (host.length > LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH) {
+        return `a host of at most ${String(LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH)} characters`;
+    }
+    const labels = host.split(".");
+    return labels.every((label) => label.length <= LOCAL_EDGE_CORE_DNS_LABEL_MAX_LENGTH && LOCAL_EDGE_CORE_UPSTREAM_LABEL.test(label))
+        ? null
+        : `a DNS name (labels of 1-${String(LOCAL_EDGE_CORE_DNS_LABEL_MAX_LENGTH)} letters, digits or -, none starting or ending with -, none empty)`;
+}
+/** Splits `host[:port]` (the host may be a bracketed IPv6 literal) and checks both halves. */
+function LocalEdgeCore_upstreamValueProblem(value) {
+    let host = value;
+    let port;
+    if (value.startsWith("[")) {
+        const close = value.indexOf("]");
+        if (close !== -1) {
+            host = value.slice(0, close + 1);
+            const rest = value.slice(close + 1);
+            if (rest !== "") {
+                if (!rest.startsWith(":")) {
+                    return "a host or host:port";
+                }
+                port = rest.slice(1);
+            }
+        }
+    }
+    else {
+        const parts = value.split(":");
+        if (parts.length > 2) {
+            return "a host or host:port (wrap an IPv6 literal in [ ])";
+        }
+        [host = "", port] = parts;
+    }
+    if (port !== undefined && !(/^[1-9]\d{0,4}$/.test(port) && Number(port) <= LOCAL_EDGE_CORE_PORT_MAX)) {
+        return `a host or host:port with a port from 1 to ${String(LOCAL_EDGE_CORE_PORT_MAX)} (no sign, no leading zero)`;
+    }
+    const hostProblem = LocalEdgeCore_upstreamHostProblem(host);
+    return hostProblem === null ? null : `a host or host:port with ${hostProblem}`;
+}
+/**
+ * Length limit and shape check of each non-path value written into the router config. A shape
+ * check returns what the value must be when it does not fit, or `null`.
+ */
 const LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES = {
-    host: { pattern: /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/, text: "a lowercase DNS name" },
-    upstreamHost: {
-        pattern: /^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\])(?::\d{1,5})?$/,
-        text: "a host or host:port",
+    host: {
+        maxLength: LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH,
+        problem: (value) => (/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/.test(value) ? null : "a lowercase DNS name"),
     },
-    readTimeout: { pattern: /^\d{1,7}(?:ms|s|m|h)?$/, text: "an nginx time such as 300s" },
+    upstreamHost: {
+        maxLength: LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH,
+        problem: LocalEdgeCore_upstreamValueProblem,
+    },
+    readTimeout: {
+        maxLength: LOCAL_EDGE_CORE_NGINX_READ_TIMEOUT_MAX_LENGTH,
+        problem: (value) => (/^\d{1,7}(?:ms|s|m|h)?$/.test(value) ? null : "an nginx time such as 300s"),
+    },
 };
 /**
  * The one check every non-path value written into the router config goes through (an exact
- * `host`, `upstreamHost`, `readTimeout`): it must be a string with no character nginx reads as
- * syntax, and it must have the value's shape. No quoting is attempted.
+ * `host`, `upstreamHost`, `readTimeout`): it must be a non-empty string within its length limit,
+ * with no character nginx reads as syntax, and it must have the value's shape. No quoting is
+ * attempted. `upstreamHost` is a DNS name, IPv4 or bracketed IPv6 literal with an optional port
+ * from 1 to 65535, at most `LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH` characters.
  *
  * @param field - Field name used in the message, for example `play: location / upstreamHost`.
  * @param kind - Which value this is.
@@ -410,6 +494,7 @@ const LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES = {
  * @example
  * ```typescript
  * LocalEdgeCore_nginxValueProblem("play: location / readTimeout", "readTimeout", "3600s"); // null
+ * LocalEdgeCore_nginxValueProblem("play: location / upstreamHost", "upstreamHost", "[::1]:5174"); // null
  * LocalEdgeCore_nginxValueProblem("play: location / upstreamHost", "upstreamHost", "a;\nuser root"); // problem text
  * ```
  */
@@ -417,12 +502,17 @@ export function LocalEdgeCore_nginxValueProblem(field, kind, value) {
     if (typeof value !== "string" || value.length === 0) {
         return `${field} must be a non-empty string`;
     }
-    if (LOCAL_EDGE_CORE_NGINX_UNSAFE_ARGUMENT.test(value)) {
-        return `${field} ${JSON.stringify(value)} has a character nginx reads as syntax (whitespace, a quote, ; { } # $ \\ or a control character)`;
-    }
     const shape = LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES[kind];
-    if (!shape.pattern.test(value)) {
-        return `${field} ${JSON.stringify(value)} must be ${shape.text}`;
+    const shown = JSON.stringify(value.length > 60 ? `${value.slice(0, 60)}...` : value);
+    if (LOCAL_EDGE_CORE_NGINX_UNSAFE_ARGUMENT.test(value)) {
+        return `${field} ${shown} has a character nginx reads as syntax (whitespace, a quote, ; { } # $ \\ or a control character)`;
+    }
+    if (value.length > shape.maxLength) {
+        return `${field} is ${String(value.length)} characters, longer than ${String(shape.maxLength)}`;
+    }
+    const mustBe = shape.problem(value);
+    if (mustBe !== null) {
+        return `${field} ${shown} must be ${mustBe}`;
     }
     return null;
 }

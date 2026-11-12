@@ -187,25 +187,40 @@ export declare function LocalEdgeCore_nginxPathArgument(field: string, value: st
  * ```
  */
 export declare function LocalEdgeCore_validateExposureHostnames(manifest: LocalEdgeCore_ExposureManifest): string[];
-/** Shapes the non-path values written into the router config must have. */
+/**
+ * Longest `upstreamHost` accepted: a 253-character DNS name, `:` and a 5-digit port. That is 259
+ * characters, far inside the 4096-byte token nginx reads from a config file, so a value that
+ * passes can always be loaded.
+ */
+export declare const LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH: number;
+/** Longest `readTimeout` accepted: seven digits and a two-letter unit (`ms`). */
+export declare const LOCAL_EDGE_CORE_NGINX_READ_TIMEOUT_MAX_LENGTH = 9;
+/** Splits `host[:port]` (the host may be a bracketed IPv6 literal) and checks both halves. */
+declare function LocalEdgeCore_upstreamValueProblem(value: string): string | null;
+/**
+ * Length limit and shape check of each non-path value written into the router config. A shape
+ * check returns what the value must be when it does not fit, or `null`.
+ */
 declare const LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES: {
     readonly host: {
-        readonly pattern: RegExp;
-        readonly text: "a lowercase DNS name";
+        readonly maxLength: 253;
+        readonly problem: (value: string) => "a lowercase DNS name" | null;
     };
     readonly upstreamHost: {
-        readonly pattern: RegExp;
-        readonly text: "a host or host:port";
+        readonly maxLength: number;
+        readonly problem: typeof LocalEdgeCore_upstreamValueProblem;
     };
     readonly readTimeout: {
-        readonly pattern: RegExp;
-        readonly text: "an nginx time such as 300s";
+        readonly maxLength: 9;
+        readonly problem: (value: string) => "an nginx time such as 300s" | null;
     };
 };
 /**
  * The one check every non-path value written into the router config goes through (an exact
- * `host`, `upstreamHost`, `readTimeout`): it must be a string with no character nginx reads as
- * syntax, and it must have the value's shape. No quoting is attempted.
+ * `host`, `upstreamHost`, `readTimeout`): it must be a non-empty string within its length limit,
+ * with no character nginx reads as syntax, and it must have the value's shape. No quoting is
+ * attempted. `upstreamHost` is a DNS name, IPv4 or bracketed IPv6 literal with an optional port
+ * from 1 to 65535, at most `LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH` characters.
  *
  * @param field - Field name used in the message, for example `play: location / upstreamHost`.
  * @param kind - Which value this is.
@@ -214,6 +229,7 @@ declare const LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES: {
  * @example
  * ```typescript
  * LocalEdgeCore_nginxValueProblem("play: location / readTimeout", "readTimeout", "3600s"); // null
+ * LocalEdgeCore_nginxValueProblem("play: location / upstreamHost", "upstreamHost", "[::1]:5174"); // null
  * LocalEdgeCore_nginxValueProblem("play: location / upstreamHost", "upstreamHost", "a;\nuser root"); // problem text
  * ```
  */

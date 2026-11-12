@@ -125,7 +125,7 @@ port outside `protectedPorts`.
   `extraWildcardTemplates` and the certificate and DNS steps cover it too.
 - An app may set an exact `host` instead (it must still sit under a configured wildcard), and
   `proxy` overrides for `/`: `upstreamHost` (the `Host` header sent upstream, for dev servers that
-  refuse unknown hosts), `buffering: false` (`proxy_buffering off`, for streams) and `readTimeout`.
+  refuse unknown hosts; a DNS name, an IPv4 address or a bracketed IPv6 literal, with an optional port from 1 to 65535, at most 259 characters), `buffering: false` (`proxy_buffering off`, for streams) and `readTimeout` (an nginx time such as `3600s`).
   Extra `locations` take the same three fields, and an empty `upstreamPath` passes the request
   URI through unchanged.
 - The provided certificate and key, with a check that their folder is 0700 and outside git.

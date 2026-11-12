@@ -24,7 +24,9 @@ import {
   type LocalEdgeCore_PrivateDirProbe,
   LocalEdgeCore_buildExposureHostname,
   LocalEdgeCore_nginxPathArgument,
+  LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH,
   LocalEdgeCore_nginxValueArgument,
+  LocalEdgeCore_nginxValueProblem,
   LocalEdgeCore_planExposureHostnames,
   LocalEdgeCore_renderExposureHostnamesNginxConfig,
   LocalEdgeCore_sniZoneSuffixPattern,
@@ -452,6 +454,149 @@ void test("hostnames: host, upstreamHost and readTimeout refuse characters nginx
   assert.equal(LocalEdgeCore_nginxValueArgument("t", "readTimeout", "3600s"), "3600s");
   assert.equal(LocalEdgeCore_nginxValueArgument("t", "upstreamHost", "[::1]:5174"), "[::1]:5174");
   assert.throws(() => LocalEdgeCore_nginxValueArgument("t", "host", "A.Example.Test"), /must be a lowercase DNS name/);
+});
+
+/** A dotted name of exactly `length` characters whose labels are all 1-63 characters. */
+function dnsNameOfLength(length: number): string {
+  const labels: string[] = [];
+  let left = length;
+  while (left > 0) {
+    const take = Math.min(63, left);
+    // Keep the remainder usable: a separator dot plus at least one more character.
+    const size = left - take === 1 ? take - 1 : take;
+    labels.push("a".repeat(size));
+    left -= size + (left - size > 0 ? 1 : 0);
+  }
+  return labels.join(".");
+}
+
+void test("hostnames: upstreamHost accepts a DNS name, IPv4 or bracketed IPv6 with a port from 1 to 65535", () => {
+  const valid = [
+    "localhost",
+    "LocalHost:5174",
+    "dev-server.svc.example.test",
+    "xn--abc.example.test:80",
+    "a",
+    "a-b.c1",
+    "192.0.2.10",
+    "192.0.2.10:5174",
+    "0.0.0.0:1",
+    "255.255.255.255:65535",
+    "[::1]",
+    "[::1]:5174",
+    "[2001:db8::1]:65535",
+    "[2001:db8:0:0:0:0:0:1]",
+    "[::ffff:192.0.2.1]:80",
+    "a".repeat(63),
+  ];
+  for (const value of valid) {
+    assert.equal(LocalEdgeCore_nginxValueProblem("upstreamHost", "upstreamHost", value), null, value);
+    assert.equal(LocalEdgeCore_nginxValueArgument("upstreamHost", "upstreamHost", value), value);
+  }
+  const invalid: [string, RegExp][] = [
+    // ports
+    ["localhost:0", /port from 1 to 65535/],
+    ["localhost:65536", /port from 1 to 65535/],
+    ["localhost:080", /port from 1 to 65535/],
+    ["localhost:00", /port from 1 to 65535/],
+    ["localhost:-1", /port from 1 to 65535/],
+    ["localhost:+80", /port from 1 to 65535/],
+    ["localhost:", /port from 1 to 65535/],
+    ["localhost:123456", /port from 1 to 65535/],
+    ["localhost:80a", /port from 1 to 65535/],
+    ["[::1]:0", /port from 1 to 65535/],
+    ["[::1]:65536", /port from 1 to 65535/],
+    ["[::1]:", /port from 1 to 65535/],
+    ["192.0.2.10:70000", /port from 1 to 65535/],
+    // DNS labels
+    ["a..example.test", /DNS name/],
+    [".example.test", /DNS name/],
+    ["example.test.", /DNS name/],
+    ["example..test:80", /DNS name/],
+    ["-a.example.test", /DNS name/],
+    ["a-.example.test", /DNS name/],
+    ["a.-b.example.test", /DNS name/],
+    ["a.b-.example.test", /DNS name/],
+    ["a_b.example.test", /DNS name/],
+    ["é.example.test", /DNS name/],
+    [`${"a".repeat(64)}.example.test`, /DNS name/],
+    [".", /valid IPv4/],
+    ["..", /valid IPv4/],
+    // IPv4
+    ["256.0.0.1", /IPv4/],
+    ["192.0.2.256:80", /IPv4/],
+    ["1.2.3", /IPv4/],
+    ["1.2.3.4.5", /IPv4/],
+    ["01.2.3.4", /IPv4/],
+    ["1..3.4", /IPv4/],
+    // IPv6 and colons
+    ["::1", /wrap an IPv6 literal/],
+    ["[::1", /bracketed IPv6/],
+    ["[]", /bracketed IPv6/],
+    ["[::1]x", /host or host:port/],
+    ["[::g]", /bracketed IPv6/],
+    ["[1:2:3]", /bracketed IPv6/],
+    ["[fe80::1%eth0]", /bracketed IPv6/],
+    ["a:1:2", /wrap an IPv6 literal/],
+  ];
+  for (const [value, expected] of invalid) {
+    const problem = LocalEdgeCore_nginxValueProblem("upstreamHost", "upstreamHost", value);
+    assert.match(problem ?? "", expected, `${JSON.stringify(value)} -> ${String(problem)}`);
+    assert.throws(() => LocalEdgeCore_nginxValueArgument("upstreamHost", "upstreamHost", value), /local-edge-core-nginx-unsafe-value/);
+  }
+});
+
+void test("hostnames: upstreamHost is bounded in length and the bound fits inside the host-name limits", () => {
+  assert.equal(LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH, 259);
+  const host253 = dnsNameOfLength(253);
+  const host254 = dnsNameOfLength(254);
+  assert.equal(host253.length, 253);
+  assert.equal(host254.length, 254);
+  assert.equal(LocalEdgeCore_nginxValueProblem("u", "upstreamHost", host253), null);
+  assert.match(LocalEdgeCore_nginxValueProblem("u", "upstreamHost", host254) ?? "", /characters, longer than 259|at most 253/);
+  // The longest accepted value: a 253-character name and a 5-digit port.
+  const longest = `${host253}:65535`;
+  assert.equal(longest.length, LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH);
+  assert.equal(LocalEdgeCore_nginxValueProblem("u", "upstreamHost", longest), null);
+  // One over the overall limit, and a 254-character name that stays within it by being short on port.
+  assert.match(LocalEdgeCore_nginxValueProblem("u", "upstreamHost", `${longest}0`) ?? "", /260 characters, longer than 259/);
+  assert.match(LocalEdgeCore_nginxValueProblem("u", "upstreamHost", `${host254}:6553`) ?? "", /at most 253/);
+  assert.match(LocalEdgeCore_nginxValueProblem("u", "upstreamHost", `${host254}:65535`) ?? "", /260 characters, longer than 259/);
+  // A very long value is refused by its length, without echoing it.
+  const huge = "a".repeat(10_000);
+  const hugeProblem = LocalEdgeCore_nginxValueProblem("u", "upstreamHost", huge) ?? "";
+  assert.match(hugeProblem, /10000 characters, longer than 259/);
+  assert.ok(hugeProblem.length < 100, "the message must not echo the value");
+  // The other two rendered values are bounded too.
+  assert.match(LocalEdgeCore_nginxValueProblem("h", "host", `${"a".repeat(63)}.${"a".repeat(63)}.${"a".repeat(63)}.${"a".repeat(62)}`) ?? "", /254 characters, longer than 253/);
+  assert.match(LocalEdgeCore_nginxValueProblem("h", "host", "a".repeat(10_000)) ?? "", /longer than 253/);
+  assert.match(LocalEdgeCore_nginxValueProblem("t", "readTimeout", "12345678s") ?? "", /longer than 9|nginx time/);
+  assert.match(LocalEdgeCore_nginxValueProblem("t", "readTimeout", "1".repeat(10_000)) ?? "", /longer than 9/);
+  assert.equal(LocalEdgeCore_nginxValueProblem("t", "readTimeout", "1234567ms"), null);
+});
+
+void test("hostnames: validation and render refuse an out-of-range upstreamHost; the longest valid one renders for nginx", () => {
+  const hostnames = { ...settings, extraWildcardTemplates: ["*.m1.{rootZone}"] };
+  const appsFor = (upstreamHost: string, path = "/") => [
+    path === "/"
+      ? { id: "a", enabled: true, localPort: 3001, host: "a.m1.example.test", proxy: { upstreamHost } }
+      : { id: "a", enabled: true, localPort: 3001, host: "a.m1.example.test", locations: [{ path, localPort: 3002, upstreamHost }] },
+  ];
+  for (const bad of ["localhost:0", "localhost:65536", "a".repeat(10_000), "a..b", ".a", "256.1.1.1"]) {
+    for (const path of ["/", "/api"]) {
+      const problems = LocalEdgeCore_validateExposureHostnames(manifest({ hostnames, apps: appsFor(bad, path) }));
+      assert.equal(problems.length, 1, `${bad.slice(0, 20)} at ${path}: ${problems.join("|")}`);
+      assert.match(problems[0] ?? "", /upstreamHost/);
+      assert.throws(
+        () => LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest({ hostnames, apps: appsFor(bad, path) })),
+        /local-edge-core-hostnames-invalid: .*upstreamHost/,
+      );
+    }
+  }
+  const longest = `${dnsNameOfLength(253)}:65535`;
+  assert.deepEqual(LocalEdgeCore_validateExposureHostnames(manifest({ hostnames, apps: appsFor(longest) })), []);
+  const rendered = LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest({ hostnames, apps: appsFor(longest) }));
+  assert.ok(rendered.includes(`proxy_set_header Host ${longest};`));
 });
 
 void test("hostnames: every rendered path field refuses characters nginx reads as syntax", () => {
