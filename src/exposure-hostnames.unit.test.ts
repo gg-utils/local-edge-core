@@ -103,20 +103,27 @@ void test("plans one server block per enabled app, then router, TLS, ACME, DNS a
   assert.equal(web?.edgeUrl, "https://web-rebuild.proj-m1.example.test:8460");
   assert.match(web?.detail ?? "", /listen 127\.0\.0\.1:8460 ssl;/);
   assert.match(web?.detail ?? "", /server_name web-rebuild\.proj-m1\.example\.test;/);
-  assert.match(web?.detail ?? "", /set \$upstream_web_rebuild 127\.0\.0\.1:3210;/);
-  assert.match(web?.detail ?? "", /ssl_certificate \/le\/tls\/wildcard\.crt;/);
+  assert.match(web?.detail ?? "", /proxy_pass http:\/\/127\.0\.0\.1:3210;/);
+  assert.match(web?.detail ?? "", /X-Forwarded-Host \$host:8460;/);
+  assert.match(web?.detail ?? "", /Connection \$local_edge_connection_upgrade;/);
 });
 
-void test("renders a whole nginx.conf with pid, logs and temp paths from config", () => {
+void test("renders a whole nginx.conf with pid, logs, temp paths and the certificate from config", () => {
   const text = LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest());
   assert.match(text, /^pid \/le\/nginx\/nginx\.pid;$/m);
-  assert.match(text, /^error_log \/le\/logs\/nginx-error\.log;$/m);
+  assert.match(text, /^error_log \/le\/logs\/nginx-error\.log warn;$/m);
   assert.match(text, /access_log \/le\/logs\/nginx-access\.log;/);
-  assert.match(text, /client_body_temp_path \/le\/nginx\/tmp\/client_body;/);
-  assert.match(text, /include {7}\/opt\/nginx\/mime\.types;/);
-  assert.match(text, /listen 127\.0\.0\.1:8460 ssl default_server;\n {4}server_name _;\n {4}ssl_reject_handshake on;/);
+  assert.match(text, /client_body_temp_path \/le\/nginx\/tmp\/body;/);
+  assert.match(text, /include \/opt\/nginx\/mime\.types;/);
+  assert.match(text, /^ {2}ssl_certificate \/le\/tls\/wildcard\.crt;$/m);
+  assert.match(text, /listen 127\.0\.0\.1:8460 ssl default_server; server_name _; return 421;/);
   assert.equal(text.match(/server_name [a-z]/g)?.length, 2);
   assert.ok(!text.includes("later"));
+  assert.equal(text, LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest()));
+  const noMime = LocalEdgeCore_renderExposureHostnamesNginxConfig(
+    manifest({ hostnames: { ...settings, nginx: { ...settings.nginx, mimeTypesPath: undefined } } }),
+  );
+  assert.ok(!noMime.includes("include"));
   assert.throws(() => LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest({ hostnames: undefined })));
 });
 
@@ -197,4 +204,40 @@ void test("backend is plan-only: apply and remove refuse even with --apply", () 
   assert.equal(backend.remove(manifest(), { apply: true }).ok, false);
   assert.deepEqual(backend.status(manifest()).map((r) => r.state), ["unknown", "unknown", "disabled"]);
   assert.equal(backend.status(manifest())[0]?.edgeUrl, "https://auth-api.proj-m1.example.test:8460");
+});
+
+void test("status reports the Serve TCP mapping in front of the router as exposed, missing or conflict", () => {
+  const withServe = (tcp: unknown) =>
+    LocalEdgeCore_createExposureBackend("hostnames", {
+      runner: () => ({ status: 0, stdout: JSON.stringify({ TCP: tcp }), stderr: "" }),
+    }).status(manifest());
+  const ok = withServe({ "8460": { TCPForward: "127.0.0.1:8460" }, "443": { HTTPS: true } });
+  assert.deepEqual(ok.map((r) => r.state), ["exposed", "exposed", "disabled"]);
+  assert.equal(ok[0]?.observedTarget, "tcp://127.0.0.1:8460");
+  assert.deepEqual(withServe({}).map((r) => r.state), ["missing", "missing", "disabled"]);
+  assert.equal(withServe({ "8460": { HTTPS: true } })[0]?.state, "conflict");
+});
+
+void test("extra path locations render after / with their own upstream paths, and bad ones refuse", () => {
+  const withLocations = manifest({
+    apps: [
+      {
+        id: "preview",
+        enabled: true,
+        localPort: 3100,
+        locations: [
+          { path: "/api/v1", localPort: 8000 },
+          { path: "/files", localPort: 8000, upstreamPath: "/storage/v1" },
+        ],
+      },
+    ],
+  });
+  const text = LocalEdgeCore_renderExposureHostnamesNginxConfig(withLocations);
+  assert.match(text, /location \/ \{\n {6}proxy_pass http:\/\/127\.0\.0\.1:3100;/);
+  assert.match(text, /location \/api\/v1 \{\n {6}proxy_pass http:\/\/127\.0\.0\.1:8000\/api\/v1;/);
+  assert.match(text, /location \/files \{\n {6}proxy_pass http:\/\/127\.0\.0\.1:8000\/storage\/v1;/);
+  for (const locations of [[{ path: "/", localPort: 8000 }], [{ path: "x y", localPort: 8000 }], [{ path: "/a", localPort: 8460 }]]) {
+    const actions = plan(manifest({ apps: [{ id: "preview", enabled: true, localPort: 3100, locations }] }));
+    assert.equal(actions[0]?.kind, "refuse", JSON.stringify(locations));
+  }
 });

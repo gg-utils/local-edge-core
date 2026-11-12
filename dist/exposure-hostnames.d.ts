@@ -20,15 +20,13 @@
  * @see src/hostname.ts - Compact name builder, template renderer and label checks.
  * @documentation reviewed=2026-11-12 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
-import { type LocalEdgeCore_ExposureAction, type LocalEdgeCore_ExposureBackend, type LocalEdgeCore_ExposureCommandRunner, type LocalEdgeCore_ExposureHostnamesConfig, type LocalEdgeCore_ExposureManifest } from "./exposure.js";
+import { type LocalEdgeCore_ExposureAction, type LocalEdgeCore_ExposureAppLocation, type LocalEdgeCore_ExposureBackend, type LocalEdgeCore_ExposureCommandRunner, type LocalEdgeCore_ExposureHostnamesConfig, type LocalEdgeCore_ExposureManifest } from "./exposure.js";
 /** Backend name for SNI-routed hostnames. */
 export declare const LOCAL_EDGE_CORE_HOSTNAMES_BACKEND = "hostnames";
 /** Default hostname template. `{label}` is `<app>` or `<app>--<realm>`. */
 export declare const LOCAL_EDGE_CORE_HOSTNAMES_DEFAULT_TEMPLATE = "{label}.{projectMachine}.{rootZone}";
 /** Default wildcard template. */
 export declare const LOCAL_EDGE_CORE_HOSTNAMES_DEFAULT_WILDCARD = "*.{projectMachine}.{rootZone}";
-/** Router health path answered by nginx itself on every host. */
-export declare const LOCAL_EDGE_CORE_HOSTNAMES_ROUTER_HEALTH_PATH = "/__local-edge/router-health";
 /** What the private-folder probe reports for one folder. */
 export type LocalEdgeCore_PrivateDirInspection = {
     exists: boolean;
@@ -53,6 +51,7 @@ export type LocalEdgeCore_ExposureHostnameEntry = {
     name: string;
     host: string;
     localPort: number;
+    locations: readonly LocalEdgeCore_ExposureAppLocation[];
 };
 /** Lists the enabled apps with their hosts. Throws when a name cannot be built. */
 export declare function LocalEdgeCore_listExposureHostnames(manifest: LocalEdgeCore_ExposureManifest, settings: LocalEdgeCore_ExposureHostnamesConfig): LocalEdgeCore_ExposureHostnameEntry[];
@@ -63,9 +62,10 @@ export declare function LocalEdgeCore_listExposureHostnames(manifest: LocalEdgeC
  */
 export declare function LocalEdgeCore_validateExposureHostnames(manifest: LocalEdgeCore_ExposureManifest): string[];
 /**
- * Renders the whole router `nginx.conf`: pid, logs and temp paths from config, a default server
- * that rejects the TLS handshake for unknown names, and one SNI server block per enabled app.
- * Pure. Throws when the settings or names are invalid.
+ * Renders the whole router `nginx.conf`: pid, logs and temp paths from config, the certificate at
+ * http level, a default server that answers 421 for unknown names, and one SNI server block per
+ * enabled app. Pure and deterministic, so a supervisor can compare it with the file on disk.
+ * Throws when the settings or names are invalid.
  */
 export declare function LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest: LocalEdgeCore_ExposureManifest): string;
 /** Reads the node's tailnet addresses from `tailscale status --json`. Read-only. */
@@ -85,5 +85,15 @@ export type LocalEdgeCore_HostnamesBackendOptions = {
 export declare function LocalEdgeCore_privateDirProblems(dir: string, probe: LocalEdgeCore_PrivateDirProbe): string[];
 /** Builds every planned action for the hostname backend. Reads only (status JSON, folder modes). */
 export declare function LocalEdgeCore_planExposureHostnames(manifest: LocalEdgeCore_ExposureManifest, options?: LocalEdgeCore_HostnamesBackendOptions): LocalEdgeCore_ExposureAction[];
+/**
+ * Observes the Serve TCP mapping in front of the router, read-only, from `serve status --json`:
+ * `exposed` when the edge port forwards to the router, `missing` when the port is unmapped, and
+ * `conflict` when it is mapped to anything else.
+ */
+export declare function LocalEdgeCore_observeHostnamesServeTcp(settings: LocalEdgeCore_ExposureHostnamesConfig, runner: LocalEdgeCore_ExposureCommandRunner, tailscaleBin: string): {
+    state: "exposed" | "missing" | "conflict" | "unknown";
+    observed: string | null;
+    note: string;
+};
 /** Creates the plan-only `hostnames` backend. `apply()` and `remove()` always refuse. */
 export declare function LocalEdgeCore_createHostnamesBackend(options?: LocalEdgeCore_HostnamesBackendOptions): LocalEdgeCore_ExposureBackend;

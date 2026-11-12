@@ -37,6 +37,18 @@ export type LocalEdgeCore_ExposureApp = {
    * Off by default: an existing foreign mapping is refused.
    */
   replaceExistingMapping?: boolean | undefined;
+  /**
+   * Extra path routes for name-based backends, in addition to `/` -> `localPort`. Each sends
+   * `path` to `127.0.0.1:<localPort><upstreamPath>`; `upstreamPath` defaults to `path`.
+   */
+  locations?: readonly LocalEdgeCore_ExposureAppLocation[] | undefined;
+};
+
+/** One extra path route of an app. */
+export type LocalEdgeCore_ExposureAppLocation = {
+  path: string;
+  localPort: number;
+  upstreamPath?: string | undefined;
 };
 
 /** Parts a hostname pattern receives for one app. */
@@ -73,6 +85,8 @@ export type LocalEdgeCore_ExposureHostnamesConfig = {
   /** Loopback router listen host. Must be 127.0.0.1. */
   routerHost: string;
   routerPort: number;
+  /** Port clients use, such as a Serve TCP port in front of the router. Defaults to `routerPort`. */
+  edgePort?: number | undefined;
   /** Certificate and key the router uses; kept in a 0700 folder outside any git checkout. */
   tls: { mode: "provided"; certPath: string; keyPath: string };
   /** Where the rendered router config lives and what it writes. All paths absolute. */
@@ -83,8 +97,8 @@ export type LocalEdgeCore_ExposureHostnamesConfig = {
     accessLogPath: string;
     /** Folder for nginx temp files (client bodies, proxy buffers). */
     tempDir: string;
-    /** `mime.types` file to include, for example the one shipped with nginx. */
-    mimeTypesPath: string;
+    /** `mime.types` file to include. Omitted: no include (the router only proxies). */
+    mimeTypesPath?: string | undefined;
   };
   /** Plan-only ACME DNS-01 issuing step. Omit to leave issuing out of the plan. */
   acme?:

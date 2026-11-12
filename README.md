@@ -104,7 +104,7 @@ cut with a short hash when a label would pass 63 characters.
 
 - One nginx server block per enabled app on `127.0.0.1:<routerPort>`, `server_name` set to its
   host. `LocalEdgeCore_renderExposureHostnamesNginxConfig` renders the whole `nginx.conf`, with
-  pid, log and temp paths from config and a default server that rejects unknown names.
+  pid, log and temp paths and the certificate from config, and a default server that answers 421.
 - The provided certificate and key, with a check that their folder is 0700 and outside git.
 - lego DNS-01: the install step (listed, never run), `lego run` for the wildcard with the DNS
   provider's env variable names only (`vercel`: `VERCEL_API_TOKEN`, `VERCEL_TEAM_ID`), and the
@@ -112,6 +112,8 @@ cut with a short hash when a label would pass 63 characters.
 - The wildcard `A`/`AAAA` records, from config or `tailscale status --json`; a noop when the
   config says the owner reports them live.
 - A raw-TCP Serve mapping of the router port: `tailscale serve --bg --tcp=<port> tcp://127.0.0.1:<port>`.
+  `status` reads `serve status --json` and reports each app `exposed` when that port forwards to
+  the router, `missing` when it is unmapped and `conflict` when it is mapped to anything else.
 
 Nothing in the plan is run: the backend issues no certificates, edits no DNS, starts no nginx and
 changes no Serve mapping. It refuses a protected or non-loopback router port.

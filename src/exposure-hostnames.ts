@@ -26,6 +26,7 @@ import path from "node:path";
 
 import {
   type LocalEdgeCore_ExposureAction,
+  type LocalEdgeCore_ExposureAppLocation,
   type LocalEdgeCore_ExposureBackend,
   type LocalEdgeCore_ExposureCommandRunner,
   type LocalEdgeCore_ExposureHostnameParts,
@@ -46,7 +47,6 @@ import {
   LocalEdgeCore_renderHostnameTemplate,
   LocalEdgeCore_sanitizeRealmSlug,
 } from "./hostname.js";
-import { LocalEdgeCore_renderNginxHttpConfig, LocalEdgeCore_renderNginxServerBlock } from "./nginx.js";
 import { LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES, LocalEdgeCore_buildLegoDns01Argv } from "./tls.js";
 
 /** Backend name for SNI-routed hostnames. */
@@ -57,9 +57,6 @@ export const LOCAL_EDGE_CORE_HOSTNAMES_DEFAULT_TEMPLATE = "{label}.{projectMachi
 
 /** Default wildcard template. */
 export const LOCAL_EDGE_CORE_HOSTNAMES_DEFAULT_WILDCARD = "*.{projectMachine}.{rootZone}";
-
-/** Router health path answered by nginx itself on every host. */
-export const LOCAL_EDGE_CORE_HOSTNAMES_ROUTER_HEALTH_PATH = "/__local-edge/router-health";
 
 /** What the private-folder probe reports for one folder. */
 export type LocalEdgeCore_PrivateDirInspection = {
@@ -141,6 +138,7 @@ export type LocalEdgeCore_ExposureHostnameEntry = {
   name: string;
   host: string;
   localPort: number;
+  locations: readonly LocalEdgeCore_ExposureAppLocation[];
 };
 
 /** Lists the enabled apps with their hosts. Throws when a name cannot be built. */
@@ -152,7 +150,13 @@ export function LocalEdgeCore_listExposureHostnames(
     .filter((app) => app.enabled)
     .map((app) => {
       const name = app.edgeName ?? app.id;
-      return { appId: app.id, name, host: LocalEdgeCore_buildExposureHostname(settings, name), localPort: app.localPort };
+      return {
+        appId: app.id,
+        name,
+        host: LocalEdgeCore_buildExposureHostname(settings, name),
+        localPort: app.localPort,
+        locations: app.locations ?? [],
+      };
     });
 }
 
@@ -220,6 +224,21 @@ export function LocalEdgeCore_validateExposureHostnames(manifest: LocalEdgeCore_
     if (app.localPort === settings.routerPort) {
       problems.push(`${app.id}: local port equals the router port`);
     }
+    const paths = new Set<string>();
+    for (const location of app.locations ?? []) {
+      for (const [field, value] of [["path", location.path], ["upstreamPath", location.upstreamPath]] as const) {
+        if (value !== undefined && !/^\/[A-Za-z0-9._~\/-]*$/.test(value)) {
+          problems.push(`${app.id}: location ${field} "${value}" must start with / and use only URL path characters`);
+        }
+      }
+      if (location.path === "/" || paths.has(location.path)) {
+        problems.push(`${app.id}: location ${location.path} is duplicated`);
+      }
+      paths.add(location.path);
+      if (!LocalEdgeCore_exposureIsPort(location.localPort) || location.localPort === settings.routerPort) {
+        problems.push(`${app.id}: location ${location.path} port ${String(location.localPort)} is not a valid upstream port`);
+      }
+    }
     let host: string;
     try {
       host = LocalEdgeCore_buildExposureHostname(settings, app.edgeName ?? app.id);
@@ -241,25 +260,60 @@ export function LocalEdgeCore_validateExposureHostnames(manifest: LocalEdgeCore_
   return problems;
 }
 
-/** Renders the server block for one host. */
+/** Port clients use to reach the router (the Serve TCP port); defaults to the router port. */
+function LocalEdgeCore_clientEdgePort(settings: LocalEdgeCore_ExposureHostnamesConfig): number {
+  return settings.edgePort ?? settings.routerPort;
+}
+
+/** Renders one proxy `location` with the shared headers. */
+function LocalEdgeCore_renderHostLocation(options: {
+  path: string;
+  localPort: number;
+  upstreamPath: string;
+  forwardedHost: string;
+}): string {
+  return `    location ${options.path} {
+      proxy_pass http://${LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST}:${String(options.localPort)}${options.upstreamPath};
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto https;
+      proxy_set_header X-Forwarded-Host ${options.forwardedHost};
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $local_edge_connection_upgrade;
+      proxy_read_timeout 300s;
+    }`;
+}
+
+/**
+ * Renders the server block for one host: TLS on the router port, `server_name` set to the host,
+ * `/` to the app's loopback port plus any extra path locations, each proxied with HTTP/1.1, the
+ * original Host, `X-Forwarded-Proto https`, `X-Forwarded-Host <host>:<edge port>`, and
+ * Upgrade/Connection passed for websockets.
+ */
 function LocalEdgeCore_renderHostServerBlock(
   settings: LocalEdgeCore_ExposureHostnamesConfig,
   entry: LocalEdgeCore_ExposureHostnameEntry,
 ): string {
-  return LocalEdgeCore_renderNginxServerBlock({
-    method: LOCAL_EDGE_CORE_HOSTNAMES_BACKEND,
-    listenHost: settings.routerHost,
-    listenPort: settings.routerPort,
-    serverNames: [entry.host],
-    tls: { certPath: settings.tls.certPath, keyPath: settings.tls.keyPath },
-    surfaceHeader: entry.name,
-    upstreamHost: LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST,
-    upstreamPort: entry.localPort,
-    variableName: `upstream_${entry.name.replace(/[^a-zA-Z0-9]/g, "_")}`,
-    websocketSafe: true,
-    routerHealthPath: LOCAL_EDGE_CORE_HOSTNAMES_ROUTER_HEALTH_PATH,
-    routerHealthBody: "ok",
-  });
+  const edgePort = LocalEdgeCore_clientEdgePort(settings);
+  const forwardedHost = edgePort === 443 ? "$host" : `$host:${String(edgePort)}`;
+  const locations = [
+    LocalEdgeCore_renderHostLocation({ path: "/", localPort: entry.localPort, upstreamPath: "", forwardedHost }),
+    ...entry.locations.map((location) =>
+      LocalEdgeCore_renderHostLocation({
+        path: location.path,
+        localPort: location.localPort,
+        upstreamPath: location.upstreamPath ?? location.path,
+        forwardedHost,
+      }),
+    ),
+  ];
+  return `  server {
+    listen ${settings.routerHost}:${String(settings.routerPort)} ssl;
+    http2 on;
+    server_name ${entry.host};
+${locations.join("\n")}
+  }`;
 }
 
 /** Throws unless the manifest and hostname settings are valid; returns the settings. */
@@ -275,52 +329,42 @@ function LocalEdgeCore_requireValidHostnames(manifest: LocalEdgeCore_ExposureMan
 }
 
 /**
- * Renders the whole router `nginx.conf`: pid, logs and temp paths from config, a default server
- * that rejects the TLS handshake for unknown names, and one SNI server block per enabled app.
- * Pure. Throws when the settings or names are invalid.
+ * Renders the whole router `nginx.conf`: pid, logs and temp paths from config, the certificate at
+ * http level, a default server that answers 421 for unknown names, and one SNI server block per
+ * enabled app. Pure and deterministic, so a supervisor can compare it with the file on disk.
+ * Throws when the settings or names are invalid.
  */
 export function LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest: LocalEdgeCore_ExposureManifest): string {
   const settings = LocalEdgeCore_requireValidHostnames(manifest);
   const { nginx } = settings;
-  const listen = `${settings.routerHost}:${String(settings.routerPort)}`;
-  const serverBlocks = [
-    `  server {
-    listen ${listen} ssl default_server;
-    server_name _;
-    ssl_reject_handshake on;
-  }`,
+  const temp = (directive: string, name: string) => `  ${directive}_temp_path ${path.join(nginx.tempDir, name)};`;
+  return [
+    "# Generated by the local-edge hostnames backend. Do not edit: changes are overwritten.",
+    "worker_processes 1;",
+    `pid ${nginx.pidPath};`,
+    `error_log ${nginx.errorLogPath} warn;`,
+    "events { worker_connections 256; }",
+    "http {",
+    ...(nginx.mimeTypesPath === undefined ? [] : [`  include ${nginx.mimeTypesPath};`]),
+    "  default_type application/octet-stream;",
+    `  access_log ${nginx.accessLogPath};`,
+    temp("client_body", "body"),
+    temp("proxy", "proxy"),
+    temp("fastcgi", "fcgi"),
+    temp("uwsgi", "uwsgi"),
+    temp("scgi", "scgi"),
+    "  server_names_hash_bucket_size 128;",
+    `  ssl_certificate ${settings.tls.certPath};`,
+    `  ssl_certificate_key ${settings.tls.keyPath};`,
+    "  ssl_protocols TLSv1.2 TLSv1.3;",
+    "  map $http_upgrade $local_edge_connection_upgrade { default upgrade; '' close; }",
+    `  server { listen ${settings.routerHost}:${String(settings.routerPort)} ssl default_server; server_name _; return 421; }`,
     ...LocalEdgeCore_listExposureHostnames(manifest, settings).map((entry) =>
       LocalEdgeCore_renderHostServerBlock(settings, entry),
     ),
-  ];
-  const http = LocalEdgeCore_renderNginxHttpConfig({
-    generatedBy: "@gg-utils/local-edge-core hostnames backend",
-    mimeTypesPath: nginx.mimeTypesPath,
-    workerProcesses: 1,
-    workerConnections: 256,
-    keepaliveTimeoutSeconds: 65,
-    serverNamesHashBucketSize: 128,
-    variablesHashBucketSize: 128,
-    variablesHashMaxSize: 2048,
-    clientBodyTimeoutSeconds: 60,
-    clientMaxBodySize: "64m",
-    proxyConnectTimeoutSeconds: 10,
-    proxyReadTimeoutSeconds: 300,
-    proxySendTimeoutSeconds: 300,
-    sendTimeoutSeconds: 300,
-    timeoutCommentLines: [],
-    dockerResolver: null,
-    serverBlocks,
-  });
-  const httpPaths = [
-    `  access_log ${nginx.accessLogPath};`,
-    ...["client_body", "proxy", "fastcgi", "uwsgi", "scgi"].map(
-      (name) => `  ${name}_temp_path ${path.join(nginx.tempDir, name)};`,
-    ),
+    "}",
+    "",
   ].join("\n");
-  return http
-    .replace(/^worker_processes /m, `pid ${nginx.pidPath};\nerror_log ${nginx.errorLogPath};\nworker_processes `)
-    .replace(/^http \{\n/m, `http {\n${httpPaths}\n`);
 }
 
 /** Reads the node's tailnet addresses from `tailscale status --json`. Read-only. */
@@ -404,7 +448,7 @@ export function LocalEdgeCore_planExposureHostnames(
       kind: "manual",
       requires: "dns-tls-owner",
       target,
-      edgeUrl: LocalEdgeCore_hostnamesEdgeUrl(entry.host, settings.routerPort),
+      edgeUrl: LocalEdgeCore_hostnamesEdgeUrl(entry.host, LocalEdgeCore_clientEdgePort(settings)),
       reason: `server_name ${entry.host} on ${routerTarget}; live once the certificate exists`,
       detail: LocalEdgeCore_renderHostServerBlock(settings, entry),
     };
@@ -509,10 +553,44 @@ export function LocalEdgeCore_planExposureHostnames(
       requires: "none",
       target: routerTarget,
       reason: "raw TCP so TLS and SNI reach the router; a go-live step, never applied by this backend",
-      argv: [tailscaleBin, "serve", "--bg", `--tcp=${String(settings.routerPort)}`, `tcp://${routerTarget}`],
+      argv: [tailscaleBin, "serve", "--bg", `--tcp=${String(LocalEdgeCore_clientEdgePort(settings))}`, `tcp://${routerTarget}`],
     });
   }
   return actions;
+}
+
+/**
+ * Observes the Serve TCP mapping in front of the router, read-only, from `serve status --json`:
+ * `exposed` when the edge port forwards to the router, `missing` when the port is unmapped, and
+ * `conflict` when it is mapped to anything else.
+ */
+export function LocalEdgeCore_observeHostnamesServeTcp(
+  settings: LocalEdgeCore_ExposureHostnamesConfig,
+  runner: LocalEdgeCore_ExposureCommandRunner,
+  tailscaleBin: string,
+): { state: "exposed" | "missing" | "conflict" | "unknown"; observed: string | null; note: string } {
+  const edgePort = String(LocalEdgeCore_clientEdgePort(settings));
+  const want = `${settings.routerHost}:${String(settings.routerPort)}`;
+  let parsed: unknown;
+  try {
+    const result = runner(tailscaleBin, ["serve", "status", "--json"]);
+    if (result.status !== 0) {
+      return { state: "unknown", observed: null, note: "serve status unavailable" };
+    }
+    parsed = JSON.parse(result.stdout.trim() === "" ? "{}" : result.stdout);
+  } catch {
+    return { state: "unknown", observed: null, note: "serve status unreadable" };
+  }
+  const tcp = (parsed as { TCP?: Record<string, { TCPForward?: unknown; HTTPS?: unknown }> } | null)?.TCP ?? {};
+  const entry = tcp[edgePort];
+  if (entry === undefined) {
+    return { state: "missing", observed: null, note: `serve :${edgePort} is not mapped` };
+  }
+  if (entry.TCPForward === want) {
+    return { state: "exposed", observed: `tcp://${want}`, note: `serve :${edgePort} tcp forward to ${want} matches` };
+  }
+  const observed = typeof entry.TCPForward === "string" ? `tcp://${entry.TCPForward}` : entry.HTTPS === true ? "https" : null;
+  return { state: "conflict", observed, note: `serve :${edgePort} is mapped to something else` };
 }
 
 /** Creates the plan-only `hostnames` backend. `apply()` and `remove()` always refuse. */
@@ -539,7 +617,7 @@ export function LocalEdgeCore_createHostnamesBackend(
     try {
       return LocalEdgeCore_hostnamesEdgeUrl(
         LocalEdgeCore_buildExposureHostname(manifest.hostnames, appName),
-        manifest.hostnames.routerPort,
+        LocalEdgeCore_clientEdgePort(manifest.hostnames),
       );
     } catch {
       return null;
@@ -565,14 +643,18 @@ export function LocalEdgeCore_createHostnamesBackend(
       }),
     apply: (_plan, applyOptions) => refuse(applyOptions?.apply !== true),
     remove: (_manifest, removeOptions) => refuse(removeOptions?.apply !== true),
-    status: (manifest) =>
-      manifest.apps.map((app) => ({
+    status: (manifest) => {
+      const serve = manifest.hostnames
+        ? LocalEdgeCore_observeHostnamesServeTcp(manifest.hostnames, options.runner ?? LocalEdgeCore_exposureDefaultCommandRunner, options.tailscaleBin ?? "tailscale")
+        : { state: "unknown" as const, observed: null, note: "hostnames settings are missing" };
+      return manifest.apps.map((app) => ({
         appId: app.id,
-        state: app.enabled ? "unknown" : "disabled",
+        state: app.enabled ? serve.state : "disabled",
         edgeUrl: app.enabled ? edgeUrlFor(manifest, app.edgeName ?? app.id) : null,
         target: LocalEdgeCore_exposureTargetUrl(app.localPort),
-        observedTarget: null,
-        note: `${name} is plan-only; status is not observed`,
-      })),
+        observedTarget: app.enabled ? serve.observed : null,
+        note: app.enabled ? serve.note : "app is disabled",
+      }));
+    },
   };
 }
