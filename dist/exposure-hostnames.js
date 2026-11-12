@@ -21,9 +21,10 @@
  * @documentation reviewed=2026-11-12 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 import fs from "node:fs";
+import { isIPv6 } from "node:net";
 import path from "node:path";
 import { LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST, LocalEdgeCore_buildExposurePlan, LocalEdgeCore_exposureDefaultCommandRunner, LocalEdgeCore_exposureIsPort, LocalEdgeCore_exposureTargetUrl, LocalEdgeCore_refusedExposureApply, LocalEdgeCore_validateExposureManifest, } from "./exposure.js";
-import { LocalEdgeCore_checkDnsLabel, LocalEdgeCore_checkHostnameLabels, LocalEdgeCore_renderHostnameTemplate, LocalEdgeCore_sanitizeRealmSlug, } from "./hostname.js";
+import { LOCAL_EDGE_CORE_DNS_LABEL_MAX_LENGTH, LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH, LocalEdgeCore_checkDnsLabel, LocalEdgeCore_checkHostnameLabels, LocalEdgeCore_renderHostnameTemplate, LocalEdgeCore_sanitizeRealmSlug, } from "./hostname.js";
 import { LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES, LocalEdgeCore_buildLegoDns01Argv } from "./tls.js";
 /** Backend name for SNI-routed hostnames. */
 export const LOCAL_EDGE_CORE_HOSTNAMES_BACKEND = "hostnames";
@@ -157,6 +158,21 @@ export function LocalEdgeCore_hostnamesEdgeUrl(host, port) {
     return port === 443 ? `https://${host}` : `https://${host}:${String(port)}`;
 }
 /**
+ * The host of one app: its exact `host`, else its own pattern, else the settings' pattern.
+ *
+ * @param settings - Hostname settings.
+ * @param app - The app's id, edge name, own pattern and exact host.
+ * @returns The host the router serves the app under.
+ * @throws When a pattern cannot be built.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_exposureAppHost(settings, { id: "play", host: "play.node1.example.test" }); // "play.node1.example.test"
+ * ```
+ */
+export function LocalEdgeCore_exposureAppHost(settings, app) {
+    return app.host ?? LocalEdgeCore_buildExposureHostname(settings, app.edgeName ?? app.id, app.hostnameTemplate);
+}
+/**
  * Lists the enabled apps with their hosts. Throws when a name cannot be built.
  *
  * @param manifest - Manifest whose enabled apps are listed.
@@ -176,9 +192,10 @@ export function LocalEdgeCore_listExposureHostnames(manifest, settings) {
         return {
             appId: app.id,
             name,
-            host: LocalEdgeCore_buildExposureHostname(settings, name, app.hostnameTemplate),
+            host: LocalEdgeCore_exposureAppHost(settings, app),
             localPort: app.localPort,
             locations: app.locations ?? [],
+            proxy: app.proxy ?? {},
         };
     });
 }
@@ -325,9 +342,14 @@ export function LocalEdgeCore_validateExposureHostnames(manifest) {
         if (app.localPort === settings.routerPort) {
             problems.push(`${app.id}: local port equals the router port`);
         }
+        problems.push(...LocalEdgeCore_proxyOptionProblems(`${app.id}: location /`, app.proxy ?? {}));
         const paths = new Set();
         for (const location of app.locations ?? []) {
+            problems.push(...LocalEdgeCore_proxyOptionProblems(`${app.id}: location ${location.path}`, location));
             for (const [field, value] of [["path", location.path], ["upstreamPath", location.upstreamPath]]) {
+                if (field === "upstreamPath" && value === "") {
+                    continue;
+                }
                 if (value !== undefined && !/^\/[A-Za-z0-9._~\/-]*$/.test(value)) {
                     problems.push(`${app.id}: location ${field} "${value}" must start with / and use only URL path characters`);
                 }
@@ -340,9 +362,16 @@ export function LocalEdgeCore_validateExposureHostnames(manifest) {
                 problems.push(`${app.id}: location ${location.path} port ${String(location.localPort)} is not a valid upstream port`);
             }
         }
+        if (app.host !== undefined) {
+            const hostProblem = LocalEdgeCore_nginxValueProblem(`${app.id}: host`, "host", app.host);
+            if (hostProblem !== null) {
+                problems.push(hostProblem);
+                continue;
+            }
+        }
         let host;
         try {
-            host = LocalEdgeCore_buildExposureHostname(settings, app.edgeName ?? app.id, app.hostnameTemplate);
+            host = LocalEdgeCore_exposureAppHost(settings, app);
         }
         catch (error) {
             problems.push(`${app.id}: ${error instanceof Error ? error.message : String(error)}`);
@@ -358,6 +387,169 @@ export function LocalEdgeCore_validateExposureHostnames(manifest) {
             problems.push(`${app.id}: ${host} is already used by ${other}`);
         }
         seen.set(host, app.id);
+    }
+    return problems;
+}
+/** Highest valid port. */
+const LOCAL_EDGE_CORE_PORT_MAX = 65535;
+/**
+ * Longest `upstreamHost` accepted: a 253-character DNS name, `:` and a 5-digit port. That is 259
+ * characters, far inside the 4096-byte token nginx reads from a config file, so a value that
+ * passes can always be loaded.
+ */
+export const LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH = LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH + 1 + 5;
+/** Longest `readTimeout` accepted: seven digits and a two-letter unit (`ms`). */
+export const LOCAL_EDGE_CORE_NGINX_READ_TIMEOUT_MAX_LENGTH = 9;
+/** One DNS label as written in a `Host` header: letters, digits and `-`, no leading or trailing `-`. */
+const LOCAL_EDGE_CORE_UPSTREAM_LABEL = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/;
+/** Dotted-quad IPv4: four parts, each `0` or 1 to 3 digits without a leading zero, at most 255. */
+function LocalEdgeCore_isIpv4(value) {
+    const parts = value.split(".");
+    return parts.length === 4 && parts.every((part) => /^(?:0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255);
+}
+/**
+ * Checks the host part of an `upstreamHost`: a DNS name (labels of 1 to 63 letters, digits or
+ * `-`, none starting or ending with `-`, no empty label, no leading or trailing dot, at most 253
+ * characters), a dotted-quad IPv4, or an IPv6 literal in brackets. A host made only of digits and
+ * dots must be a valid IPv4, so `256.0.0.1` is refused rather than read as a name. Unlike
+ * `LocalEdgeCore_checkDnsLabel` it accepts upper case and `xn--` labels, which a `Host` header may carry.
+ */
+function LocalEdgeCore_upstreamHostProblem(host) {
+    if (host.startsWith("[")) {
+        const literal = host.slice(1, -1);
+        return host.endsWith("]") && /^[0-9A-Fa-f:.]+$/.test(literal) && isIPv6(literal)
+            ? null
+            : "a valid bracketed IPv6 literal";
+    }
+    if (/^[0-9.]+$/.test(host)) {
+        return LocalEdgeCore_isIpv4(host) ? null : "a valid IPv4 address (four parts, 0-255)";
+    }
+    if (host.length > LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH) {
+        return `a host of at most ${String(LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH)} characters`;
+    }
+    const labels = host.split(".");
+    return labels.every((label) => label.length <= LOCAL_EDGE_CORE_DNS_LABEL_MAX_LENGTH && LOCAL_EDGE_CORE_UPSTREAM_LABEL.test(label))
+        ? null
+        : `a DNS name (labels of 1-${String(LOCAL_EDGE_CORE_DNS_LABEL_MAX_LENGTH)} letters, digits or -, none starting or ending with -, none empty)`;
+}
+/** Splits `host[:port]` (the host may be a bracketed IPv6 literal) and checks both halves. */
+function LocalEdgeCore_upstreamValueProblem(value) {
+    let host = value;
+    let port;
+    if (value.startsWith("[")) {
+        const close = value.indexOf("]");
+        if (close !== -1) {
+            host = value.slice(0, close + 1);
+            const rest = value.slice(close + 1);
+            if (rest !== "") {
+                if (!rest.startsWith(":")) {
+                    return "a host or host:port";
+                }
+                port = rest.slice(1);
+            }
+        }
+    }
+    else {
+        const parts = value.split(":");
+        if (parts.length > 2) {
+            return "a host or host:port (wrap an IPv6 literal in [ ])";
+        }
+        [host = "", port] = parts;
+    }
+    if (port !== undefined && !(/^[1-9]\d{0,4}$/.test(port) && Number(port) <= LOCAL_EDGE_CORE_PORT_MAX)) {
+        return `a host or host:port with a port from 1 to ${String(LOCAL_EDGE_CORE_PORT_MAX)} (no sign, no leading zero)`;
+    }
+    const hostProblem = LocalEdgeCore_upstreamHostProblem(host);
+    return hostProblem === null ? null : `a host or host:port with ${hostProblem}`;
+}
+/**
+ * Length limit and shape check of each non-path value written into the router config. A shape
+ * check returns what the value must be when it does not fit, or `null`.
+ */
+const LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES = {
+    host: {
+        maxLength: LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH,
+        problem: (value) => (/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/.test(value) ? null : "a lowercase DNS name"),
+    },
+    upstreamHost: {
+        maxLength: LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH,
+        problem: LocalEdgeCore_upstreamValueProblem,
+    },
+    readTimeout: {
+        maxLength: LOCAL_EDGE_CORE_NGINX_READ_TIMEOUT_MAX_LENGTH,
+        problem: (value) => (/^\d{1,7}(?:ms|s|m|h)?$/.test(value) ? null : "an nginx time such as 300s"),
+    },
+};
+/**
+ * The one check every non-path value written into the router config goes through (an exact
+ * `host`, `upstreamHost`, `readTimeout`): it must be a non-empty string within its length limit,
+ * with no character nginx reads as syntax, and it must have the value's shape. No quoting is
+ * attempted. `upstreamHost` is a DNS name, IPv4 or bracketed IPv6 literal with an optional port
+ * from 1 to 65535, at most `LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH` characters.
+ *
+ * @param field - Field name used in the message, for example `play: location / upstreamHost`.
+ * @param kind - Which value this is.
+ * @param value - Value from config.
+ * @returns `null` when the value is safe to write unquoted, otherwise the problem.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_nginxValueProblem("play: location / readTimeout", "readTimeout", "3600s"); // null
+ * LocalEdgeCore_nginxValueProblem("play: location / upstreamHost", "upstreamHost", "[::1]:5174"); // null
+ * LocalEdgeCore_nginxValueProblem("play: location / upstreamHost", "upstreamHost", "a;\nuser root"); // problem text
+ * ```
+ */
+export function LocalEdgeCore_nginxValueProblem(field, kind, value) {
+    if (typeof value !== "string" || value.length === 0) {
+        return `${field} must be a non-empty string`;
+    }
+    const shape = LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES[kind];
+    const shown = JSON.stringify(value.length > 60 ? `${value.slice(0, 60)}...` : value);
+    if (LOCAL_EDGE_CORE_NGINX_UNSAFE_ARGUMENT.test(value)) {
+        return `${field} ${shown} has a character nginx reads as syntax (whitespace, a quote, ; { } # $ \\ or a control character)`;
+    }
+    if (value.length > shape.maxLength) {
+        return `${field} is ${String(value.length)} characters, longer than ${String(shape.maxLength)}`;
+    }
+    const mustBe = shape.problem(value);
+    if (mustBe !== null) {
+        return `${field} ${shown} must be ${mustBe}`;
+    }
+    return null;
+}
+/**
+ * Returns `value` for writing into the router config, or throws, so the renderer stays safe even
+ * when called without validation.
+ *
+ * @param field - Field name used in the error.
+ * @param kind - Which value this is.
+ * @param value - Value from config.
+ * @returns The unchanged value.
+ * @throws `local-edge-core-nginx-unsafe-value` when `LocalEdgeCore_nginxValueProblem` reports a problem.
+ * @example
+ * ```typescript
+ * `proxy_read_timeout ${LocalEdgeCore_nginxValueArgument("play: location / readTimeout", "readTimeout", "3600s")};`;
+ * ```
+ */
+export function LocalEdgeCore_nginxValueArgument(field, kind, value) {
+    const problem = LocalEdgeCore_nginxValueProblem(field, kind, value);
+    if (problem !== null) {
+        throw new Error(`local-edge-core-nginx-unsafe-value: ${problem}`);
+    }
+    return value;
+}
+/** Checks proxy overrides through the shared value check. */
+function LocalEdgeCore_proxyOptionProblems(label, options) {
+    const problems = [];
+    for (const kind of ["upstreamHost", "readTimeout"]) {
+        if (options[kind] !== undefined) {
+            const problem = LocalEdgeCore_nginxValueProblem(`${label} ${kind}`, kind, options[kind]);
+            if (problem !== null) {
+                problems.push(problem);
+            }
+        }
+    }
+    if (options.buffering !== undefined && typeof options.buffering !== "boolean") {
+        problems.push(`${label} buffering must be true or false`);
     }
     return problems;
 }
@@ -534,17 +726,18 @@ function LocalEdgeCore_renderStreamBlock(settings) {
 }
 /** Renders one proxy `location` with the shared headers. */
 function LocalEdgeCore_renderHostLocation(options) {
+    const buffering = options.proxy.buffering === false ? "\n      proxy_buffering off;" : "";
     return `    location ${options.path} {
       proxy_pass http://${LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST}:${String(options.localPort)}${options.upstreamPath};
       proxy_http_version 1.1;
-      proxy_set_header Host $host;
+      proxy_set_header Host ${options.proxy.upstreamHost === undefined ? "$host" : LocalEdgeCore_nginxValueArgument(`location ${options.path} upstreamHost`, "upstreamHost", options.proxy.upstreamHost)};
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_set_header X-Forwarded-Proto https;
       proxy_set_header X-Forwarded-Host ${options.forwardedHost};
       proxy_set_header X-Forwarded-Port ${options.forwardedPort};
       proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection $local_edge_connection_upgrade;
-      proxy_read_timeout 300s;
+      proxy_set_header Connection $local_edge_connection_upgrade;${buffering}
+      proxy_read_timeout ${options.proxy.readTimeout === undefined ? "300s" : LocalEdgeCore_nginxValueArgument(`location ${options.path} readTimeout`, "readTimeout", options.proxy.readTimeout)};
     }`;
 }
 /**
@@ -563,6 +756,7 @@ function LocalEdgeCore_renderHostServerBlock(settings, entry) {
             upstreamPath: "",
             forwardedHost,
             forwardedPort,
+            proxy: entry.proxy,
         }),
         ...entry.locations.map((location) => LocalEdgeCore_renderHostLocation({
             path: location.path,
@@ -570,13 +764,14 @@ function LocalEdgeCore_renderHostServerBlock(settings, entry) {
             upstreamPath: location.upstreamPath ?? location.path,
             forwardedHost,
             forwardedPort,
+            proxy: location,
         })),
     ];
     const listens = listeners.map((listener) => `    ${LocalEdgeCore_renderListen(settings, listener, "")}`);
     return `  server {
 ${listens.join("\n")}
     http2 on;
-    server_name ${entry.host};
+    server_name ${LocalEdgeCore_nginxValueArgument(`${entry.appId}: host`, "host", entry.host)};
 ${locations.join("\n")}
   }`;
 }
@@ -917,12 +1112,12 @@ export function LocalEdgeCore_createHostnamesBackend(options = {}) {
         dryRun,
         message: `${name} is plan-only: certificates, DNS and the Serve mapping are owner steps; run the planned steps by hand`,
     });
-    const edgeUrlFor = (manifest, appName, appTemplate) => {
+    const edgeUrlFor = (manifest, app) => {
         if (!manifest.hostnames) {
             return null;
         }
         try {
-            return LocalEdgeCore_hostnamesEdgeUrl(LocalEdgeCore_buildExposureHostname(manifest.hostnames, appName, appTemplate), LocalEdgeCore_clientEdgePort(manifest.hostnames));
+            return LocalEdgeCore_hostnamesEdgeUrl(LocalEdgeCore_exposureAppHost(manifest.hostnames, app), LocalEdgeCore_clientEdgePort(manifest.hostnames));
         }
         catch {
             return null;
@@ -954,7 +1149,7 @@ export function LocalEdgeCore_createHostnamesBackend(options = {}) {
             return manifest.apps.map((app) => ({
                 appId: app.id,
                 state: app.enabled ? serve.state : "disabled",
-                edgeUrl: app.enabled ? edgeUrlFor(manifest, app.edgeName ?? app.id, app.hostnameTemplate) : null,
+                edgeUrl: app.enabled ? edgeUrlFor(manifest, app) : null,
                 target: LocalEdgeCore_exposureTargetUrl(app.localPort),
                 observedTarget: app.enabled ? serve.observed : null,
                 note: app.enabled ? serve.note : "app is disabled",

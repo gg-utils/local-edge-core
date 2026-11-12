@@ -20,7 +20,7 @@
  * @see src/hostname.ts - Compact name builder, template renderer and label checks.
  * @documentation reviewed=2026-11-12 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
-import { type LocalEdgeCore_ExposureAction, type LocalEdgeCore_ExposureAppLocation, type LocalEdgeCore_ExposureBackend, type LocalEdgeCore_ExposureCommandRunner, type LocalEdgeCore_ExposureHostnamesConfig, type LocalEdgeCore_ExposureManifest } from "./exposure.js";
+import { type LocalEdgeCore_ExposureAction, type LocalEdgeCore_ExposureApp, type LocalEdgeCore_ExposureAppLocation, type LocalEdgeCore_ExposureProxyOptions, type LocalEdgeCore_ExposureBackend, type LocalEdgeCore_ExposureCommandRunner, type LocalEdgeCore_ExposureHostnamesConfig, type LocalEdgeCore_ExposureManifest } from "./exposure.js";
 /** Backend name for SNI-routed hostnames. */
 export declare const LOCAL_EDGE_CORE_HOSTNAMES_BACKEND = "hostnames";
 /** Default hostname template. `{label}` is `<app>` or `<app>--<realm>`. */
@@ -114,7 +114,22 @@ export type LocalEdgeCore_ExposureHostnameEntry = {
     host: string;
     localPort: number;
     locations: readonly LocalEdgeCore_ExposureAppLocation[];
+    /** Proxy overrides for `/`. */
+    proxy: LocalEdgeCore_ExposureProxyOptions;
 };
+/**
+ * The host of one app: its exact `host`, else its own pattern, else the settings' pattern.
+ *
+ * @param settings - Hostname settings.
+ * @param app - The app's id, edge name, own pattern and exact host.
+ * @returns The host the router serves the app under.
+ * @throws When a pattern cannot be built.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_exposureAppHost(settings, { id: "play", host: "play.node1.example.test" }); // "play.node1.example.test"
+ * ```
+ */
+export declare function LocalEdgeCore_exposureAppHost(settings: LocalEdgeCore_ExposureHostnamesConfig, app: Pick<LocalEdgeCore_ExposureApp, "id" | "edgeName" | "hostnameTemplate" | "host">): string;
 /**
  * Lists the enabled apps with their hosts. Throws when a name cannot be built.
  *
@@ -172,6 +187,68 @@ export declare function LocalEdgeCore_nginxPathArgument(field: string, value: st
  * ```
  */
 export declare function LocalEdgeCore_validateExposureHostnames(manifest: LocalEdgeCore_ExposureManifest): string[];
+/**
+ * Longest `upstreamHost` accepted: a 253-character DNS name, `:` and a 5-digit port. That is 259
+ * characters, far inside the 4096-byte token nginx reads from a config file, so a value that
+ * passes can always be loaded.
+ */
+export declare const LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH: number;
+/** Longest `readTimeout` accepted: seven digits and a two-letter unit (`ms`). */
+export declare const LOCAL_EDGE_CORE_NGINX_READ_TIMEOUT_MAX_LENGTH = 9;
+/** Splits `host[:port]` (the host may be a bracketed IPv6 literal) and checks both halves. */
+declare function LocalEdgeCore_upstreamValueProblem(value: string): string | null;
+/**
+ * Length limit and shape check of each non-path value written into the router config. A shape
+ * check returns what the value must be when it does not fit, or `null`.
+ */
+declare const LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES: {
+    readonly host: {
+        readonly maxLength: 253;
+        readonly problem: (value: string) => "a lowercase DNS name" | null;
+    };
+    readonly upstreamHost: {
+        readonly maxLength: number;
+        readonly problem: typeof LocalEdgeCore_upstreamValueProblem;
+    };
+    readonly readTimeout: {
+        readonly maxLength: 9;
+        readonly problem: (value: string) => "an nginx time such as 300s" | null;
+    };
+};
+/**
+ * The one check every non-path value written into the router config goes through (an exact
+ * `host`, `upstreamHost`, `readTimeout`): it must be a non-empty string within its length limit,
+ * with no character nginx reads as syntax, and it must have the value's shape. No quoting is
+ * attempted. `upstreamHost` is a DNS name, IPv4 or bracketed IPv6 literal with an optional port
+ * from 1 to 65535, at most `LOCAL_EDGE_CORE_NGINX_UPSTREAM_HOST_MAX_LENGTH` characters.
+ *
+ * @param field - Field name used in the message, for example `play: location / upstreamHost`.
+ * @param kind - Which value this is.
+ * @param value - Value from config.
+ * @returns `null` when the value is safe to write unquoted, otherwise the problem.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_nginxValueProblem("play: location / readTimeout", "readTimeout", "3600s"); // null
+ * LocalEdgeCore_nginxValueProblem("play: location / upstreamHost", "upstreamHost", "[::1]:5174"); // null
+ * LocalEdgeCore_nginxValueProblem("play: location / upstreamHost", "upstreamHost", "a;\nuser root"); // problem text
+ * ```
+ */
+export declare function LocalEdgeCore_nginxValueProblem(field: string, kind: keyof typeof LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES, value: unknown): string | null;
+/**
+ * Returns `value` for writing into the router config, or throws, so the renderer stays safe even
+ * when called without validation.
+ *
+ * @param field - Field name used in the error.
+ * @param kind - Which value this is.
+ * @param value - Value from config.
+ * @returns The unchanged value.
+ * @throws `local-edge-core-nginx-unsafe-value` when `LocalEdgeCore_nginxValueProblem` reports a problem.
+ * @example
+ * ```typescript
+ * `proxy_read_timeout ${LocalEdgeCore_nginxValueArgument("play: location / readTimeout", "readTimeout", "3600s")};`;
+ * ```
+ */
+export declare function LocalEdgeCore_nginxValueArgument(field: string, kind: keyof typeof LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES, value: string): string;
 /** A listener with its defaults filled in. */
 type LocalEdgeCore_ResolvedRouterListener = {
     port: number;
