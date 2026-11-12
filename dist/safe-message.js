@@ -23,6 +23,8 @@ export const LOCAL_EDGE_CORE_MESSAGE_OPTION_SHAPE = /^--?[A-Za-z0-9][A-Za-z0-9_-
 export const LOCAL_EDGE_CORE_MESSAGE_WORD_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 /** An app id: lowercase letters, digits and dashes, at most one DNS label (63 characters). */
 export const LOCAL_EDGE_CORE_MESSAGE_APP_ID_SHAPE = /^[a-z0-9][a-z0-9-]*$/;
+/** An environment variable name: upper-case letters, digits and underscores, at most 64 characters. */
+export const LOCAL_EDGE_CORE_MESSAGE_ENV_NAME_SHAPE = /^[A-Z][A-Z0-9_]{0,63}$/;
 /** Longest app id a message will name (the DNS label limit). */
 export const LOCAL_EDGE_CORE_MESSAGE_APP_ID_MAX_LENGTH = 63;
 /**
@@ -101,6 +103,12 @@ export function LocalEdgeCore_messageOption(value) {
  * Names a command, method or similar word in a message: the word itself when it is short and plain,
  * otherwise `<N characters>`.
  *
+ * This still repeats a short alphanumeric token (up to 48 characters) pasted as a CLI value such as
+ * `--exit-code` or `--method`. That is by design: command-line input is not secret, and naming the
+ * rejected word helps the person who typed it. Control characters, newlines and anything longer
+ * are never repeated. Environment variable values must never go through this helper; their
+ * messages name the variable and the rule only.
+ *
  * @param value - The word as given.
  * @returns Text that is safe to put in a message.
  *
@@ -132,6 +140,27 @@ export function LocalEdgeCore_messageWords(values) {
     const shown = values.slice(0, LOCAL_EDGE_CORE_MESSAGE_WORDS_MAX_COUNT).map((value) => LocalEdgeCore_messageWord(value));
     const rest = values.length - shown.length;
     return rest > 0 ? `${shown.join(" ")} (and ${String(rest)} more)` : shown.join(" ");
+}
+/**
+ * Names a list of environment variable names in a message, comma separated: at most five, each
+ * repeated only when it has the environment variable name shape (otherwise `<N characters>`), then
+ * a count of the rest. Names only; this never receives or prints a value.
+ *
+ * @param names - The variable names as given.
+ * @returns Text that is safe to put in a message.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_messageEnvNames(["B_KEY", "A_KEY"]); // "B_KEY,A_KEY"
+ * LocalEdgeCore_messageEnvNames(["bad name"]); // "<8 characters>"
+ * ```
+ */
+export function LocalEdgeCore_messageEnvNames(names) {
+    const shown = names
+        .slice(0, LOCAL_EDGE_CORE_MESSAGE_WORDS_MAX_COUNT)
+        .map((name) => LocalEdgeCore_messageName(name, LOCAL_EDGE_CORE_MESSAGE_ENV_NAME_SHAPE, 64));
+    const rest = names.length - shown.length;
+    return rest > 0 ? `${shown.join(",")} (and ${String(rest)} more)` : shown.join(",");
 }
 /**
  * Returns a number for a message, or `<not a number>` for any other input. A number is bounded

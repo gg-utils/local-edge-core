@@ -61,6 +61,7 @@ import { LOCAL_EDGE_CORE_REALM_REGISTRY_SCHEMA_VERSION, type LocalEdgeCore_Realm
 import { LocalEdgeCore_buildManifestRoutePlan } from "./route-plan.js";
 import {
   LocalEdgeCore_messageAppLabel,
+  LocalEdgeCore_messageEnvNames,
   LocalEdgeCore_messageNumber,
   LocalEdgeCore_messageOption,
   LocalEdgeCore_messageWord,
@@ -786,6 +787,27 @@ const cases: readonly EchoCase[] = [
     },
   },
   {
+    name: "legacy env key names: oversized, badly shaped and too many",
+    marker: "mk77zz",
+    run: (m) => {
+      const result = LocalEdgeCore_resolveConfiguredMethods({
+        rawMethodsCsv: undefined,
+        supportedMethods: ["nginx-docker"],
+        defaultMethod: "nginx-docker",
+        envName: "METHODS",
+        unsupportedLegacyEnvKeys: [
+          bait(m),
+          `${m}=value;rm`,
+          `${m.toUpperCase()}${"X".repeat(200)}`,
+          ...Array.from({ length: 50 }, (_, i) => `${m.toUpperCase()}_${String(i)}`),
+        ],
+        singleMethodMode: false,
+      });
+      assert.equal(result.ok, false);
+      return [JSON.stringify(result)];
+    },
+  },
+  {
     name: "route plan with an unknown upstream, and one missing from the realm",
     marker: "mk66zz",
     run: (m) => {
@@ -863,4 +885,22 @@ void test("a well formed app id and host are still named in problems", () => {
     manifestWith({}, [{ id: "stray", enabled: true, localPort: 3210, host: "stray.elsewhere.test" }]),
   );
   assert.ok(problems.some((problem) => problem.startsWith("stray: stray.elsewhere.test is not directly under *.proj-node1.example.test")));
+});
+
+void test("legacy env key names are listed only when they are short names, and at most five", () => {
+  assert.equal(LocalEdgeCore_messageEnvNames(["B_KEY", "A_KEY"]), "B_KEY,A_KEY");
+  assert.equal(LocalEdgeCore_messageEnvNames(["a".repeat(3)]), "<3 characters>");
+  assert.equal(LocalEdgeCore_messageEnvNames(["lower_case"]), "<10 characters>");
+  assert.equal(LocalEdgeCore_messageEnvNames([`A${"B".repeat(63)}`]), `A${"B".repeat(63)}`);
+  assert.equal(LocalEdgeCore_messageEnvNames([`A${"B".repeat(64)}`]), "<65 characters>");
+  assert.equal(LocalEdgeCore_messageEnvNames(["A=1", "A\nB"]), "<3 characters>,<3 characters>");
+  assert.equal(LocalEdgeCore_messageEnvNames(["A", "B", "C", "D", "E", "F", "G"]), "A,B,C,D,E (and 2 more)");
+  assert.equal(LocalEdgeCore_messageEnvNames([42, undefined]), "<not a string>,<not a string>");
+});
+
+void test("the word helper still repeats a short plain token pasted as a CLI value, by design", () => {
+  assert.equal(LocalEdgeCore_messageWord("hunter2"), "hunter2");
+  assert.equal(LocalEdgeCore_messageWord("1\n2"), "<3 characters>");
+  assert.equal(LocalEdgeCore_messageWord("x".repeat(48)), "x".repeat(48));
+  assert.equal(LocalEdgeCore_messageWord("x".repeat(49)), "<49 characters>");
 });
