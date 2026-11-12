@@ -23,6 +23,8 @@ export declare const LOCAL_EDGE_CORE_MESSAGE_OPTION_SHAPE: RegExp;
 export declare const LOCAL_EDGE_CORE_MESSAGE_WORD_SHAPE: RegExp;
 /** An app id: lowercase letters, digits and dashes, at most one DNS label (63 characters). */
 export declare const LOCAL_EDGE_CORE_MESSAGE_APP_ID_SHAPE: RegExp;
+/** An environment variable name: upper-case letters, digits and underscores, at most 64 characters. */
+export declare const LOCAL_EDGE_CORE_MESSAGE_ENV_NAME_SHAPE: RegExp;
 /** Longest app id a message will name (the DNS label limit). */
 export declare const LOCAL_EDGE_CORE_MESSAGE_APP_ID_MAX_LENGTH = 63;
 /**
@@ -86,6 +88,12 @@ export declare function LocalEdgeCore_messageOption(value: unknown): string;
  * Names a command, method or similar word in a message: the word itself when it is short and plain,
  * otherwise `<N characters>`.
  *
+ * This still repeats a short alphanumeric token (up to 48 characters) pasted as a CLI value such as
+ * `--exit-code` or `--method`. That is by design: command-line input is not secret, and naming the
+ * rejected word helps the person who typed it. Control characters, newlines and anything longer
+ * are never repeated. Environment variable values must never go through this helper; their
+ * messages name the variable and the rule only.
+ *
  * @param value - The word as given.
  * @returns Text that is safe to put in a message.
  *
@@ -110,6 +118,21 @@ export declare function LocalEdgeCore_messageWord(value: unknown): string;
  * ```
  */
 export declare function LocalEdgeCore_messageWords(values: readonly unknown[]): string;
+/**
+ * Names a list of environment variable names in a message, comma separated: at most five, each
+ * repeated only when it has the environment variable name shape (otherwise `<N characters>`), then
+ * a count of the rest. Names only; this never receives or prints a value.
+ *
+ * @param names - The variable names as given.
+ * @returns Text that is safe to put in a message.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_messageEnvNames(["B_KEY", "A_KEY"]); // "B_KEY,A_KEY"
+ * LocalEdgeCore_messageEnvNames(["bad name"]); // "<8 characters>"
+ * ```
+ */
+export declare function LocalEdgeCore_messageEnvNames(names: readonly unknown[]): string;
 /**
  * Returns a number for a message, or `<not a number>` for any other input. A number is bounded
  * text; a value that only claims to be one (a string, an object) is never repeated.

@@ -17,7 +17,7 @@ import path from "node:path";
 import { LocalEdgeCore_normalizeSlugOrFallback } from "./config-primitives.js";
 import { LocalEdgeCore_normalizeLegacyArtifactPath, LocalEdgeCore_normalizeMachineRootDir, } from "./paths.js";
 import { LocalEdgeCore_buildDockerComposeDownCommand, LocalEdgeCore_buildDockerComposeUpDetachedCommand, } from "./docker-lifecycle.js";
-import { LocalEdgeCore_messageWord } from "./safe-message.js";
+import { LocalEdgeCore_messageEnvNames, LocalEdgeCore_messageWord } from "./safe-message.js";
 /** Normalizes a local-edge route/config segment with the legacy `default` empty fallback. */
 export function LocalEdgeCore_slugifySegment(rawValue) {
     return LocalEdgeCore_normalizeSlugOrFallback({
@@ -85,7 +85,7 @@ export function LocalEdgeCore_resolveConfiguredMethods(options) {
         const sorted = [...options.unsupportedLegacyEnvKeys].sort();
         return {
             ok: false,
-            message: `Unsupported legacy host-managed local-edge env keys detected. Remove: ${sorted.join(",")}.`,
+            message: `Unsupported legacy host-managed local-edge env keys detected. Remove: ${LocalEdgeCore_messageEnvNames(sorted)}.`,
         };
     }
     const methodsCsv = options.rawMethodsCsv ?? options.defaultMethod;

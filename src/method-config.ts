@@ -25,7 +25,7 @@ import {
   LocalEdgeCore_buildDockerComposeDownCommand,
   LocalEdgeCore_buildDockerComposeUpDetachedCommand,
 } from "./docker-lifecycle.js";
-import { LocalEdgeCore_messageWord } from "./safe-message.js";
+import { LocalEdgeCore_messageEnvNames, LocalEdgeCore_messageWord } from "./safe-message.js";
 
 /** Result of resolving an adapter-provided method CSV against a supported-method allowlist. */
 export type LocalEdgeCore_ConfiguredMethodsResult =
@@ -158,7 +158,7 @@ export function LocalEdgeCore_resolveConfiguredMethods(options: {
     const sorted = [...options.unsupportedLegacyEnvKeys].sort();
     return {
       ok: false,
-      message: `Unsupported legacy host-managed local-edge env keys detected. Remove: ${sorted.join(",")}.`,
+      message: `Unsupported legacy host-managed local-edge env keys detected. Remove: ${LocalEdgeCore_messageEnvNames(sorted)}.`,
     };
   }
 
