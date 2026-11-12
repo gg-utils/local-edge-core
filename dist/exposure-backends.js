@@ -10,6 +10,7 @@
  * @see src/exposure-plan-only.ts - Plan-only backends.
  * @documentation reviewed=2026-11-11 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
+import { LOCAL_EDGE_CORE_MESSAGE_WORD_SHAPE, LocalEdgeCore_messageQuoted } from "./safe-message.js";
 import { LOCAL_EDGE_CORE_HOSTNAMES_BACKEND, LocalEdgeCore_createHostnamesBackend, } from "./exposure-hostnames.js";
 import { LOCAL_EDGE_CORE_TAILSCALE_SERVICES_BACKEND, LocalEdgeCore_createTailscaleServicesBackend, } from "./exposure-plan-only.js";
 import { LOCAL_EDGE_CORE_TAILSCALE_SERVE_PORTS_BACKEND, LocalEdgeCore_createTailscaleServePortsBackend, } from "./exposure-tailscale-serve.js";
@@ -78,7 +79,7 @@ export function LocalEdgeCore_createExposureBackend(name, options = {}) {
         case LOCAL_EDGE_CORE_HOSTNAMES_BACKEND:
             return LocalEdgeCore_createHostnamesBackend(options);
         default:
-            throw new Error(`unknown exposure backend "${name}"; known: ${[...LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES, ...Object.keys(LOCAL_EDGE_CORE_EXPOSURE_BACKEND_ALIASES)].join(", ")}`);
+            throw new Error(`unknown exposure backend ${LocalEdgeCore_messageQuoted(name, LOCAL_EDGE_CORE_MESSAGE_WORD_SHAPE)}; known: ${[...LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES, ...Object.keys(LOCAL_EDGE_CORE_EXPOSURE_BACKEND_ALIASES)].join(", ")}`);
     }
 }
 /* The `./exposure` subpath is the one import consumers need: contract, backends and registry. */

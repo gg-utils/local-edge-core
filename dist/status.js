@@ -31,6 +31,7 @@
  * @documentation reviewed=2026-05-23 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 import { LocalEdgeCore_validateRequestedMethod } from "./method-config.js";
+import { LocalEdgeCore_messageOption, LocalEdgeCore_messageWord } from "./safe-message.js";
 /** Parses status command argv without loading env, probing Docker, or touching the filesystem. */
 export function LocalEdgeCore_parseStatusCliArgs(options) {
     let outputMode = "text";
@@ -54,7 +55,7 @@ export function LocalEdgeCore_parseStatusCliArgs(options) {
                 index += 1;
                 break;
             default:
-                throw new Error(`[${options.commandLabel}] Unknown option: ${argument}`);
+                throw new Error(`[${options.commandLabel}] Unknown option: ${LocalEdgeCore_messageOption(argument)}`);
         }
     }
     return {
@@ -148,7 +149,7 @@ export function LocalEdgeCore_buildStatusReport(options) {
 function LocalEdgeCore_requireMethodStatus(options) {
     const status = options.report.methodStatuses.find((candidate) => candidate.method === options.method);
     if (!status) {
-        throw new Error(`[local-edge-core:status] Missing status for method '${options.method}'.`);
+        throw new Error(`[local-edge-core:status] Missing status for method '${LocalEdgeCore_messageWord(options.method)}'.`);
     }
     return status;
 }

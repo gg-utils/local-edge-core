@@ -14,6 +14,8 @@
  * @documentation reviewed=2026-05-23 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 
+import { LocalEdgeCore_messageOption, LocalEdgeCore_messageValue, LocalEdgeCore_messageWord, LocalEdgeCore_messageWords } from "./safe-message.js";
+
 /** Parsed command envelope for the shell-shim compatibility CLI. */
 export type LocalEdgeCore_ShellShimParseResult =
   | {
@@ -92,7 +94,7 @@ function LocalEdgeCore_parseShellShimResolveFormatterState(
 ): LocalEdgeCore_ShellShimParseResult {
   if (rest.length > 0) {
     throw new LocalEdgeCoreShellShimError(
-      `Unexpected arguments for resolve-formatter-state: ${rest.join(" ")}`,
+      `Unexpected arguments for resolve-formatter-state: ${LocalEdgeCore_messageWords(rest)}`,
     );
   }
   return { command: "resolve-formatter-state" };
@@ -111,7 +113,7 @@ function LocalEdgeCore_parseShellShimPrintPrelude(
       continue;
     }
     throw new LocalEdgeCoreShellShimError(
-      `Unknown argument for print-prelude: ${token}`,
+      `Unknown argument for print-prelude: ${LocalEdgeCore_messageOption(token)}`,
     );
   }
   if (logFile.length === 0) {
@@ -129,7 +131,7 @@ function LocalEdgeCore_parseShellShimIsTruthy(
   const value = rest[0] ?? "false";
   if (rest.length > 1) {
     throw new LocalEdgeCoreShellShimError(
-      `Unexpected arguments for is-truthy: ${rest.slice(1).join(" ")}`,
+      `Unexpected arguments for is-truthy: ${LocalEdgeCore_messageWords(rest.slice(1))}`,
     );
   }
   return { command: "is-truthy", value };
@@ -148,7 +150,7 @@ function LocalEdgeCore_parseShellShimCollectActiveEnvFiles(
       continue;
     }
     throw new LocalEdgeCoreShellShimError(
-      `Unknown argument for collect-active-env-files: ${token}`,
+      `Unknown argument for collect-active-env-files: ${LocalEdgeCore_messageOption(token)}`,
     );
   }
   if (projectRoot.length === 0) {
@@ -182,7 +184,7 @@ function LocalEdgeCore_parseShellShimNormalizeLegacyArtifactPath(
       continue;
     }
     throw new LocalEdgeCoreShellShimError(
-      `Unknown argument for normalize-legacy-artifact-path: ${token}`,
+      `Unknown argument for normalize-legacy-artifact-path: ${LocalEdgeCore_messageOption(token)}`,
     );
   }
   if (!sawMachineRoot || !sawRaw || machineRoot.length === 0) {
@@ -206,7 +208,7 @@ function LocalEdgeCore_parseShellShimPrintMethodUrlMatrix(
       continue;
     }
     throw new LocalEdgeCoreShellShimError(
-      `Unknown argument for print-method-url-matrix: ${token}`,
+      `Unknown argument for print-method-url-matrix: ${LocalEdgeCore_messageOption(token)}`,
     );
   }
   if (method.length === 0) {
@@ -233,13 +235,13 @@ function LocalEdgeCore_parseShellShimResolveLogColorEnabled(
         isTtyStdout = false;
       } else {
         throw new LocalEdgeCoreShellShimError(
-          `resolve-log-color-enabled requires --is-tty-stdout true|false (got '${raw}').`,
+          `resolve-log-color-enabled requires --is-tty-stdout true|false (got '${LocalEdgeCore_messageValue(raw)}').`,
         );
       }
       continue;
     }
     throw new LocalEdgeCoreShellShimError(
-      `Unknown argument for resolve-log-color-enabled: ${token}`,
+      `Unknown argument for resolve-log-color-enabled: ${LocalEdgeCore_messageOption(token)}`,
     );
   }
   if (isTtyStdout === undefined) {
@@ -283,5 +285,5 @@ export function LocalEdgeCore_parseShellShimArgv(
     return LocalEdgeCore_parseShellShimResolveLogColorEnabled(rest);
   }
 
-  throw new LocalEdgeCoreShellShimError(`Unknown command: ${command}`);
+  throw new LocalEdgeCoreShellShimError(`Unknown command: ${LocalEdgeCore_messageWord(command)}`);
 }

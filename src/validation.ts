@@ -19,6 +19,7 @@
 import { existsSync } from "node:fs";
 
 import { LocalEdgeCore_isTruthy } from "./log-output.js";
+import { LocalEdgeCore_messageValue } from "./safe-message.js";
 
 /** Validation outcome returned by pure local-edge check functions. */
 export type LocalEdgeCore_ValidationResult =
@@ -35,7 +36,7 @@ export function LocalEdgeCore_validatePort(options: {
   if (!/^\d+$/.test(value)) {
     return {
       ok: false,
-      message: `${label} must be numeric. Current value='${value}'.`,
+      message: `${label} must be numeric. Current value='${LocalEdgeCore_messageValue(value)}'.`,
     };
   }
 
@@ -43,7 +44,7 @@ export function LocalEdgeCore_validatePort(options: {
   if (parsed < 1 || parsed > 65535) {
     return {
       ok: false,
-      message: `${label} must be in range 1..65535. Current value='${value}'.`,
+      message: `${label} must be in range 1..65535. Current value='${LocalEdgeCore_messageValue(value)}'.`,
     };
   }
 
@@ -60,7 +61,7 @@ export function LocalEdgeCore_validatePositiveInteger(options: {
   if (!/^\d+$/.test(value)) {
     return {
       ok: false,
-      message: `${label} must be numeric. Current value='${value}'.`,
+      message: `${label} must be numeric. Current value='${LocalEdgeCore_messageValue(value)}'.`,
     };
   }
 
@@ -68,7 +69,7 @@ export function LocalEdgeCore_validatePositiveInteger(options: {
   if (parsed < 1) {
     return {
       ok: false,
-      message: `${label} must be >= 1. Current value='${value}'.`,
+      message: `${label} must be >= 1. Current value='${LocalEdgeCore_messageValue(value)}'.`,
     };
   }
 

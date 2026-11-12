@@ -18,6 +18,7 @@
 
 import { LocalEdgeCore_buildHostnameFromParts } from "./hostname.js";
 import { LocalEdgeCore_validateRequestedMethod } from "./method-config.js";
+import { LocalEdgeCore_messageOption } from "./safe-message.js";
 
 /** Parsed method/help options for URL-matrix commands. */
 export type LocalEdgeCore_UrlMatrixCliOptions = {
@@ -57,7 +58,7 @@ export function LocalEdgeCore_parseUrlMatrixCliArgs(options: {
       return { method: requestedMethod, help: true };
     }
 
-    throw new Error(`[${options.commandLabel}] Unknown option: ${argument}`);
+    throw new Error(`[${options.commandLabel}] Unknown option: ${LocalEdgeCore_messageOption(argument)}`);
   }
 
   if (requestedMethod === "primary" || requestedMethod === "all") {

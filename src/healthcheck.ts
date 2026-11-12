@@ -43,6 +43,7 @@
  */
 
 import { LocalEdgeCore_validateRequestedMethod } from "./method-config.js";
+import { LocalEdgeCore_messageOption } from "./safe-message.js";
 
 /** Domain assigned to a health probe failure after transport/application classification. */
 export type LocalEdgeCore_HealthFailureDomain =
@@ -214,7 +215,7 @@ function LocalEdgeCore_validateHealthcheckArgs(options: {
       continue;
     }
 
-    throw new Error(`[${options.commandLabel}] Unknown option: ${argument}`);
+    throw new Error(`[${options.commandLabel}] Unknown option: ${LocalEdgeCore_messageOption(argument)}`);
   }
 }
 

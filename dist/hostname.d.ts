@@ -54,7 +54,7 @@ export declare const LOCAL_EDGE_CORE_COMPACT_REALM_SEPARATOR = "--";
  * @example
  * ```typescript
  * LocalEdgeCore_checkDnsLabel("web"); // null
- * LocalEdgeCore_checkDnsLabel("ab--x"); // "label \"ab--x\" may not have -- at positions 3-4"
+ * LocalEdgeCore_checkDnsLabel("ab--x"); // "label (4 characters) may not have -- at positions 3-4"
  * ```
  */
 export declare function LocalEdgeCore_checkDnsLabel(label: string): string | null;
@@ -65,7 +65,8 @@ export declare const LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH = 253;
  *
  * @param hostname - Dotted name without a trailing dot, for example a root zone, wildcard or host.
  * @returns One problem per invalid label, plus one when the whole name is longer than 253
- *   characters; empty means valid. Never throws.
+ *   characters; empty means valid. Never throws. A problem names the length and the position of
+ *   the label, and never repeats any part of the name.
  *
  * @example
  * ```typescript

@@ -14,6 +14,7 @@
  * @documentation reviewed=2026-05-22 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 import { LocalEdgeCore_validateRequestedMethod } from "./method-config.js";
+import { LocalEdgeCore_messageOption } from "./safe-message.js";
 /** Parses the package-core CLI shell flags without executing host mutations. */
 export function LocalEdgeCore_parseCliArgs(args) {
     const result = {
@@ -66,7 +67,7 @@ export function LocalEdgeCore_parseRenderCliArgs(options) {
             mode = "check";
         }
         else {
-            throw new Error(`[${options.commandLabel}] Unknown option: ${argument}`);
+            throw new Error(`[${options.commandLabel}] Unknown option: ${LocalEdgeCore_messageOption(argument)}`);
         }
     }
     return {

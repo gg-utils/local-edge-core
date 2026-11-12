@@ -14,6 +14,7 @@
  *
  * @documentation reviewed=2026-05-23 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
+import { LocalEdgeCore_messageOption, LocalEdgeCore_messageWord } from "./safe-message.js";
 /** Concrete local-edge router methods currently supported by the core startup contract. */
 export const LOCAL_EDGE_STARTUP_CLI_SUPPORTED_METHODS = [
     "nginx-docker",
@@ -118,7 +119,7 @@ function LocalEdgeStartupCli_assertCommand(value) {
         "launch-runtime",
     ];
     if (!allowed.includes(value)) {
-        throw new LocalEdgeStartupCliParseError(`[local-edge:startup-cli] Unknown command: ${value}`, { exitCode: 2 });
+        throw new LocalEdgeStartupCliParseError(`[local-edge:startup-cli] Unknown command: ${LocalEdgeCore_messageWord(value)}`, { exitCode: 2 });
     }
 }
 /**
@@ -133,7 +134,7 @@ function LocalEdgeStartupCli_validateMethodOrAll(label, raw) {
     if (raw === "all" || LocalEdge_StartupCli_isLocalEdgeMethod(raw)) {
         return raw;
     }
-    throw new LocalEdgeStartupCliParseError(`[${label}] Unsupported --method '${raw}'.`);
+    throw new LocalEdgeStartupCliParseError(`[${label}] Unsupported --method '${LocalEdgeCore_messageWord(raw)}'.`);
 }
 /**
  * Validates `--method` for `start`, allowing only `all` or `nginx-docker`.
@@ -147,7 +148,7 @@ function LocalEdgeStartupCli_validateStartMethod(label, raw) {
     if (raw === "all" || raw === "nginx-docker") {
         return raw;
     }
-    throw new LocalEdgeStartupCliParseError(`[${label}] Unsupported --method '${raw}'.`);
+    throw new LocalEdgeStartupCliParseError(`[${label}] Unsupported --method '${LocalEdgeCore_messageWord(raw)}'.`);
 }
 /**
  * Reads the argv token immediately after a flag, rejecting missing values and chained `--` options.
@@ -225,7 +226,7 @@ export function LocalEdgeStartupCli_parseDoctor(argv) {
             index += 1;
             continue;
         }
-        throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${token}`);
+        throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`);
     }
     if (methodFromCli === undefined) {
         return { command: "doctor", methodSource: "primary", ...options };
@@ -273,7 +274,7 @@ export function LocalEdgeStartupCli_parseEnsureRunning(argv) {
             recreateIfRunning = true;
             continue;
         }
-        throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${token}`);
+        throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`);
     }
     if (methodFromCli === undefined) {
         return {
@@ -309,7 +310,7 @@ export function LocalEdgeStartupCli_parseCanonicalStart(argv) {
             preflightOnly = true;
             continue;
         }
-        throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${token}`);
+        throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`);
     }
     return {
         command: "canonical-start",
@@ -354,7 +355,7 @@ function LocalEdgeStartupCli_consumeInitArg(label, argv, index, state) {
         state.promptDeveloperSlug = "false";
         return index + 1;
     }
-    throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${token}`);
+    throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`);
 }
 /**
  * Parses `init` argv.
@@ -412,7 +413,7 @@ export function LocalEdgeStartupCli_parseSetup(argv) {
             strict = "false";
             continue;
         }
-        throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${token}`);
+        throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`);
     }
     if (methodFromCli === undefined) {
         return {
@@ -447,7 +448,7 @@ export function LocalEdgeStartupCli_parseStart(argv) {
             index += 1;
             continue;
         }
-        throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${token}`);
+        throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`);
     }
     if (methodFromCli === undefined) {
         return { command: "start", methodSource: "primary" };
@@ -475,7 +476,7 @@ export function LocalEdgeStartupCli_parseStop(argv) {
             index += 1;
             continue;
         }
-        throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${token}`);
+        throw new LocalEdgeStartupCliParseError(`[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`);
     }
     if (methodFromCli === undefined) {
         return {
@@ -568,7 +569,7 @@ function LocalEdgeStartupCli_readPrimaryMethod(env) {
 function LocalEdgeStartupCli_validateMethod(label, method) {
     if (method !== "all" &&
         !LOCAL_EDGE_STARTUP_CLI_SUPPORTED_METHODS.includes(method)) {
-        throw new LocalEdgeStartupCliParseError(`[${label}] Unsupported --method '${method}'.`);
+        throw new LocalEdgeStartupCliParseError(`[${label}] Unsupported --method '${LocalEdgeCore_messageWord(method)}'.`);
     }
 }
 /**

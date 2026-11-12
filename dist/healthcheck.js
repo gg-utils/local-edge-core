@@ -42,6 +42,7 @@
  * @documentation reviewed=2026-05-22 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 import { LocalEdgeCore_validateRequestedMethod } from "./method-config.js";
+import { LocalEdgeCore_messageOption } from "./safe-message.js";
 /** Returns whether a valueless CLI flag is present in argv. */
 function LocalEdgeCore_hasBooleanArg(args, flag) {
     return args.includes(flag);
@@ -94,7 +95,7 @@ function LocalEdgeCore_validateHealthcheckArgs(options) {
         if (valuelessFlags.has(argument)) {
             continue;
         }
-        throw new Error(`[${options.commandLabel}] Unknown option: ${argument}`);
+        throw new Error(`[${options.commandLabel}] Unknown option: ${LocalEdgeCore_messageOption(argument)}`);
     }
 }
 /** Returns the value paired with a CLI flag, or null when the flag is absent. */

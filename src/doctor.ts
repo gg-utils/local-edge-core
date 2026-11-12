@@ -16,6 +16,7 @@
  */
 
 import fs from "node:fs";
+import { LocalEdgeCore_messageWord } from "./safe-message.js";
 
 /** Stable prefix for every doctor log line consumed by operators and tests. */
 export const LOCAL_EDGE_CORE_DOCTOR_LOG_PREFIX = "[local-edge:doctor]";
@@ -202,7 +203,7 @@ export function LocalEdgeCore_doctorParseArgv(
     };
   }
 
-  throw new LocalEdgeCoreDoctorError(`Unknown command: ${command}`);
+  throw new LocalEdgeCoreDoctorError(`Unknown command: ${LocalEdgeCore_messageWord(command)}`);
 }
 
 /** Counts realm rows by status for the doctor registry line. */

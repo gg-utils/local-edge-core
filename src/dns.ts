@@ -13,6 +13,8 @@
  * @documentation reviewed=2026-05-22 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 
+import { LocalEdgeCore_messageOption, LocalEdgeCore_messageWord } from "./safe-message.js";
+
 /** One split-DNS wildcard address rule for a local-edge routing method. */
 export type LocalEdgeCore_SplitDnsAddressRule = {
   method: string;
@@ -204,7 +206,7 @@ export function LocalEdgeCore_parseDnsAuditCliArgs(options: {
       if (value !== "all" && !options.supportedMethods.includes(value)) {
         return {
           ok: false,
-          message: `[local-edge:dns-audit] Unsupported --method '${value}'.`,
+          message: `[local-edge:dns-audit] Unsupported --method '${LocalEdgeCore_messageWord(value)}'.`,
           exitCode: 2,
         };
       }
@@ -219,7 +221,7 @@ export function LocalEdgeCore_parseDnsAuditCliArgs(options: {
     } else {
       return {
         ok: false,
-        message: `[local-edge:dns-audit] Unknown option: ${argument ?? ""}`,
+        message: `[local-edge:dns-audit] Unknown option: ${LocalEdgeCore_messageOption(argument ?? "")}`,
         exitCode: 2,
       };
     }

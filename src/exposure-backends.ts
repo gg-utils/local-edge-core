@@ -12,6 +12,7 @@
  */
 
 import type { LocalEdgeCore_ExposureBackend, LocalEdgeCore_ExposureCommandRunner } from "./exposure.js";
+import { LOCAL_EDGE_CORE_MESSAGE_WORD_SHAPE, LocalEdgeCore_messageQuoted } from "./safe-message.js";
 import {
   type LocalEdgeCore_HostnamesBackendOptions,
   LOCAL_EDGE_CORE_HOSTNAMES_BACKEND,
@@ -111,7 +112,7 @@ export function LocalEdgeCore_createExposureBackend(
       return LocalEdgeCore_createHostnamesBackend(options);
     default:
       throw new Error(
-        `unknown exposure backend "${name}"; known: ${[...LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES, ...Object.keys(LOCAL_EDGE_CORE_EXPOSURE_BACKEND_ALIASES)].join(", ")}`,
+        `unknown exposure backend ${LocalEdgeCore_messageQuoted(name, LOCAL_EDGE_CORE_MESSAGE_WORD_SHAPE)}; known: ${[...LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES, ...Object.keys(LOCAL_EDGE_CORE_EXPOSURE_BACKEND_ALIASES)].join(", ")}`,
       );
   }
 }

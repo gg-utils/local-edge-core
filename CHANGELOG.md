@@ -1,6 +1,18 @@
 # Changelog
 
-## 0.4.0
+## Unreleased
+
+### Changed
+
+- **Messages no longer repeat raw input.** A problem, error or refusal may name the field, the rule, the length of a value and an identifier that already passed its own shape check. It never contains a value that is unchecked or long, because such a value may be oversized, hold control characters or be a secret pasted into the wrong field. Messages that used to quote a value now give its length instead, for example `hostnames.rootZone (12 characters) must have at least two labels`.
+  - **Manifest and hostnames problems.** `hostname`, `rootZone`, `realm`, `projectMachineLabel`, `edgeName`, `acme.dnsProvider`, wildcards, location `path` and `upstreamPath`, stream route server names, stream upstreams and `connectTimeout`, and every path setting (`LocalEdgeCore_nginxPathProblem` no longer prints the path with `JSON.stringify`). A port or count that is not a number is reported as `<not a number>`.
+  - **Apps.** An app id is named only when it has the app id shape and is at most 63 characters (one DNS label). Otherwise the app is named by its position, `apps[2]`, and a location by `locations[1]`. This covers `LocalEdgeCore_validateExposureManifest`, the hostnames problems, the plan text and the `tailscale-serve-ports` refusals.
+  - **Hostnames.** A built host is repeated in "is not directly under" and "is already used by" only after it passed the label checks (an exact `host` already passed the value check). `LocalEdgeCore_checkDnsLabel` and `LocalEdgeCore_checkHostnameLabels` give the length and position of a bad label, not the label. An error thrown by a `buildHostname` function is no longer copied into a problem.
+  - **Backends.** An unknown backend name and the backend name of a plan passed to `apply` are repeated only when they are short plain words.
+  - **Command lines and environment values.** Unknown options, commands and methods are repeated only when they look like a short option name or word. A raw environment or option value (`Received '...'`, `Current value='...'`) is repeated only when it is at most 24 plain characters. Manifest surface, upstream and realm names in route-plan errors follow the same rule.
+- The two manifest messages about an app id now start with the app name, like the other app messages: `web: app id is listed twice` (it was `app id "web" is listed twice`), and `apps[2]: app id (7 characters) must be lowercase letters, digits and dashes`.
+
+## 0.4.0 - 2026-11-12
 
 ### Added
 
@@ -20,7 +32,7 @@
 - Test fixtures use reserved documentation names only.
 - `LOCAL_EDGE_CORE_FALLBACK_TAILNET_SUFFIX` and `LocalEdgeCore_resolveTailnetSuffix` carry `@example` documentation with reserved example values.
 
-## 0.3.0
+## 0.3.0 - 2026-11-12
 
 ### Added
 

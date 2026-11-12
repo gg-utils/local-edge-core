@@ -15,6 +15,7 @@
  */
 
 import { LocalEdgeCore_validateRequestedMethod } from "./method-config.js";
+import { LocalEdgeCore_messageOption } from "./safe-message.js";
 
 /** Parsed global CLI flags shared by future package-core commands. */
 export type LocalEdgeCore_CliParseResult = {
@@ -92,7 +93,7 @@ export function LocalEdgeCore_parseRenderCliArgs(options: {
     } else if (argument === "--dry-run" || argument === "--check") {
       mode = "check";
     } else {
-      throw new Error(`[${options.commandLabel}] Unknown option: ${argument}`);
+      throw new Error(`[${options.commandLabel}] Unknown option: ${LocalEdgeCore_messageOption(argument)}`);
     }
   }
 

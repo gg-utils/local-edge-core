@@ -17,20 +17,21 @@
  */
 import { LocalEdgeCore_buildHostnameFromParts } from "./hostname.js";
 import { LocalEdgeCore_validateRealmRecord, } from "./registry.js";
+import { LocalEdgeCore_messageWord } from "./safe-message.js";
 /** Validates that a manifest surface references a declared upstream id. */
 function LocalEdgeCore_assertManifestUpstreamExists(options) {
     const exists = options.manifest.upstreams.some((upstream) => upstream.id === options.surface.upstreamId);
     if (!exists) {
-        throw new Error(`[local-edge-core:route-plan] surface '${options.surface.id}' references ` +
-            `unknown manifest upstream '${options.surface.upstreamId}'.`);
+        throw new Error(`[local-edge-core:route-plan] surface '${LocalEdgeCore_messageWord(options.surface.id)}' references ` +
+            `unknown manifest upstream '${LocalEdgeCore_messageWord(options.surface.upstreamId)}'.`);
     }
 }
 /** Resolves the runtime upstream for a surface from the neutral realm record. */
 function LocalEdgeCore_resolveRoutePlanUpstream(options) {
     const upstream = options.realmRecord.upstreams[options.surface.upstreamId];
     if (!upstream) {
-        throw new Error(`[local-edge-core:route-plan] realm '${options.realmRecord.realmSlug}' missing ` +
-            `upstream '${options.surface.upstreamId}' for surface '${options.surface.id}'.`);
+        throw new Error(`[local-edge-core:route-plan] realm '${LocalEdgeCore_messageWord(options.realmRecord.realmSlug)}' missing ` +
+            `upstream '${LocalEdgeCore_messageWord(options.surface.upstreamId)}' for surface '${LocalEdgeCore_messageWord(options.surface.id)}'.`);
     }
     return upstream;
 }

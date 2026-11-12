@@ -53,6 +53,13 @@ import {
   LocalEdgeCore_renderHostnameTemplate,
   LocalEdgeCore_sanitizeRealmSlug,
 } from "./hostname.js";
+import {
+  LOCAL_EDGE_CORE_MESSAGE_WORD_SHAPE,
+  LocalEdgeCore_messageAppLabel,
+  LocalEdgeCore_messageInputSize,
+  LocalEdgeCore_messageQuoted,
+  LocalEdgeCore_messageNumber,
+} from "./safe-message.js";
 import { LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES, LocalEdgeCore_buildLegoDns01Argv } from "./tls.js";
 
 /** Backend name for SNI-routed hostnames. */
@@ -292,12 +299,13 @@ const LOCAL_EDGE_CORE_NGINX_UNSAFE_ARGUMENT = /[\s"'`;{}#$\\\u0000-\u001f\u007f]
  *
  * @param field - Config field name used in the message, for example `hostnames.nginx.pidPath`.
  * @param value - Path from config.
- * @returns `null` when the path is safe to write unquoted, otherwise the problem.
+ * @returns `null` when the path is safe to write unquoted, otherwise the problem. The problem names
+ *   the field, the rule and the length, and never contains any part of the path.
  *
  * @example
  * ```typescript
  * LocalEdgeCore_nginxPathProblem("hostnames.nginx.pidPath", "/srv/edge/nginx.pid"); // null
- * LocalEdgeCore_nginxPathProblem("hostnames.nginx.pidPath", "/srv/x.pid;\nuser root"); // problem text
+ * LocalEdgeCore_nginxPathProblem("hostnames.nginx.pidPath", "/srv/x.pid;\nuser root"); // problem text, no part of the path
  * ```
  */
 export function LocalEdgeCore_nginxPathProblem(field: string, value: string): string | null {
@@ -305,7 +313,7 @@ export function LocalEdgeCore_nginxPathProblem(field: string, value: string): st
     return `${field} must be an absolute path`;
   }
   if (LOCAL_EDGE_CORE_NGINX_UNSAFE_ARGUMENT.test(value)) {
-    return `${field} ${JSON.stringify(value)} has a character nginx reads as syntax (whitespace, a quote, ; { } # $ \\ or a control character)`;
+    return `${field} (${LocalEdgeCore_messageInputSize(value)}) has a character nginx reads as syntax (whitespace, a quote, ; { } # $ \\ or a control character)`;
   }
   return null;
 }
@@ -355,6 +363,32 @@ function LocalEdgeCore_pathProblems(settings: LocalEdgeCore_ExposureHostnamesCon
   });
 }
 
+/** A URL path an app location may use: starts with `/`, then URL path characters only. */
+const LOCAL_EDGE_CORE_URL_PATH = /^\/[A-Za-z0-9._~\/-]*$/;
+
+/** Longest location path a message will repeat. */
+const LOCAL_EDGE_CORE_LOCATION_LABEL_MAX_LENGTH = 64;
+
+/** Names a location in a message: its path once the path passed the URL path check, else its position. */
+function LocalEdgeCore_locationLabel(locationPath: unknown, index: number): string {
+  return typeof locationPath === "string" &&
+    locationPath.length <= LOCAL_EDGE_CORE_LOCATION_LABEL_MAX_LENGTH &&
+    LOCAL_EDGE_CORE_URL_PATH.test(locationPath)
+    ? locationPath
+    : `locations[${String(index)}]`;
+}
+
+/**
+ * Message for a host that could not be built. Our own errors (`local-edge-core-...`) are repeated
+ * because they never contain raw input; anything else, such as an error thrown by a `buildHostname`
+ * function from config, is not.
+ */
+function LocalEdgeCore_hostBuildProblem(error: unknown): string {
+  return error instanceof Error && error.message.startsWith("local-edge-core-")
+    ? error.message
+    : "the host could not be built (the hostname pattern failed)";
+}
+
 /**
  * Validates the hostname settings and every app name: DNS labels and 253-character names, one host per app, each host
  * directly under the wildcard, loopback router and client edge port on valid unprotected ports, and absolute paths free of nginx syntax characters.
@@ -377,76 +411,93 @@ export function LocalEdgeCore_validateExposureHostnames(manifest: LocalEdgeCore_
     problems.push(`hostnames.projectMachineLabel: ${labelProblem}`);
   }
   if (!settings.rootZone.includes(".")) {
-    problems.push(`hostnames.rootZone "${settings.rootZone}" must have at least two labels`);
+    problems.push(`hostnames.rootZone (${LocalEdgeCore_messageInputSize(settings.rootZone)}) must have at least two labels`);
   }
   problems.push(...LocalEdgeCore_checkHostnameLabels(settings.rootZone).map((p) => `hostnames.rootZone: ${p}`));
   if (LocalEdgeCore_sanitizeRealmSlug(settings.realm).length === 0) {
-    problems.push(`hostnames.realm "${settings.realm}" has no usable characters`);
+    problems.push(`hostnames.realm (${LocalEdgeCore_messageInputSize(settings.realm)}) has no usable characters`);
   }
   if (settings.routerHost !== LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST) {
     problems.push(`hostnames.routerHost must be ${LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST}`);
   }
   if (!LocalEdgeCore_exposureIsPort(settings.routerPort)) {
-    problems.push(`hostnames.routerPort ${String(settings.routerPort)} is not a valid TCP port`);
+    problems.push(`hostnames.routerPort ${LocalEdgeCore_messageNumber(settings.routerPort)} is not a valid TCP port`);
   } else if (manifest.protectedPorts.includes(settings.routerPort)) {
     problems.push(`hostnames.routerPort ${String(settings.routerPort)} is protected`);
   }
   if (settings.edgePort !== undefined) {
     if (!LocalEdgeCore_exposureIsPort(settings.edgePort)) {
-      problems.push(`hostnames.edgePort ${String(settings.edgePort)} is not a valid TCP port`);
+      problems.push(`hostnames.edgePort ${LocalEdgeCore_messageNumber(settings.edgePort)} is not a valid TCP port`);
     } else if (manifest.protectedPorts.includes(settings.edgePort)) {
       problems.push(`hostnames.edgePort ${String(settings.edgePort)} is protected`);
     }
   }
   const workers = settings.nginx.workerConnections;
   if (workers !== undefined && !(Number.isInteger(workers) && workers >= 1 && workers <= 1_048_576)) {
-    problems.push(`hostnames.nginx.workerConnections ${String(workers)} is not a positive integer`);
+    problems.push(`hostnames.nginx.workerConnections ${LocalEdgeCore_messageNumber(workers)} is not a positive integer`);
   }
   problems.push(...LocalEdgeCore_pathProblems(settings));
   if (settings.acme && LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES[settings.acme.dnsProvider] === undefined) {
-    problems.push(`hostnames.acme.dnsProvider "${settings.acme.dnsProvider}" has no known env names`);
+    problems.push(
+      `hostnames.acme.dnsProvider ${LocalEdgeCore_messageQuoted(settings.acme.dnsProvider, LOCAL_EDGE_CORE_MESSAGE_WORD_SHAPE)} has no known env names`,
+    );
   }
 
   const wildcards = LocalEdgeCore_buildExposureHostnamesWildcards(settings);
-  for (const wildcard of wildcards) {
-    problems.push(...LocalEdgeCore_checkHostnameLabels(wildcard));
+  // The wildcards are named in later messages only when every one of them passed the label checks.
+  let wildcardsChecked = labelProblem === null;
+  const rootZoneChecked = settings.rootZone.includes(".") && LocalEdgeCore_checkHostnameLabels(settings.rootZone).length === 0;
+  const rootZoneName = rootZoneChecked ? settings.rootZone : "<rootZone>";
+  for (const [index, wildcard] of wildcards.entries()) {
+    const wildcardProblems = LocalEdgeCore_checkHostnameLabels(wildcard);
+    problems.push(...wildcardProblems);
+    if (wildcardProblems.length > 0) {
+      wildcardsChecked = false;
+    }
     if (!wildcard.startsWith("*.") || !wildcard.endsWith(`.${settings.rootZone}`)) {
-      problems.push(`hostnames wildcard ${wildcard} must be *.<label>.${settings.rootZone}`);
+      wildcardsChecked = false;
+      problems.push(
+        `hostnames wildcard ${String(index + 1)} of ${String(wildcards.length)} (${LocalEdgeCore_messageInputSize(wildcard)}) must be *.<label>.${rootZoneName}`,
+      );
     }
   }
+  const wildcardNames = wildcardsChecked ? wildcards.join(" or ") : "the configured wildcard";
   const wildcardParents = new Set(wildcards.map((wildcard) => wildcard.replace(/^\*\./, "")));
   problems.push(...LocalEdgeCore_listenerProblems(manifest, settings));
   problems.push(...LocalEdgeCore_streamProblems(manifest, settings));
   const seen = new Map<string, string>();
-  for (const app of manifest.apps) {
+  for (const [appIndex, app] of manifest.apps.entries()) {
     if (!app.enabled) {
       continue;
     }
+    // The id is named only if it passes the app id shape; otherwise the app is named by position.
+    const who = LocalEdgeCore_messageAppLabel(app.id, appIndex);
     if (app.localPort === settings.routerPort) {
-      problems.push(`${app.id}: local port equals the router port`);
+      problems.push(`${who}: local port equals the router port`);
     }
-    problems.push(...LocalEdgeCore_proxyOptionProblems(`${app.id}: location /`, app.proxy ?? {}));
+    problems.push(...LocalEdgeCore_proxyOptionProblems(`${who}: location /`, app.proxy ?? {}));
     const paths = new Set<string>();
-    for (const location of app.locations ?? []) {
-      problems.push(...LocalEdgeCore_proxyOptionProblems(`${app.id}: location ${location.path}`, location));
+    for (const [locationIndex, location] of (app.locations ?? []).entries()) {
+      const where = `${who}: location ${LocalEdgeCore_locationLabel(location.path, locationIndex)}`;
+      problems.push(...LocalEdgeCore_proxyOptionProblems(where, location));
       for (const [field, value] of [["path", location.path], ["upstreamPath", location.upstreamPath]] as const) {
         if (field === "upstreamPath" && value === "") {
           continue;
         }
-        if (value !== undefined && !/^\/[A-Za-z0-9._~\/-]*$/.test(value)) {
-          problems.push(`${app.id}: location ${field} "${value}" must start with / and use only URL path characters`);
+        if (value !== undefined && !LOCAL_EDGE_CORE_URL_PATH.test(value)) {
+          problems.push(`${who}: location ${field} (${LocalEdgeCore_messageInputSize(value)}) must start with / and use only URL path characters`);
         }
       }
       if (location.path === "/" || paths.has(location.path)) {
-        problems.push(`${app.id}: location ${location.path} is duplicated`);
+        problems.push(`${where} is duplicated`);
       }
       paths.add(location.path);
       if (!LocalEdgeCore_exposureIsPort(location.localPort) || location.localPort === settings.routerPort) {
-        problems.push(`${app.id}: location ${location.path} port ${String(location.localPort)} is not a valid upstream port`);
+        problems.push(`${where} port ${LocalEdgeCore_messageNumber(location.localPort)} is not a valid upstream port`);
       }
     }
     if (app.host !== undefined) {
-      const hostProblem = LocalEdgeCore_nginxValueProblem(`${app.id}: host`, "host", app.host);
+      const hostProblem = LocalEdgeCore_nginxValueProblem(`${who}: host`, "host", app.host);
       if (hostProblem !== null) {
         problems.push(hostProblem);
         continue;
@@ -456,22 +507,28 @@ export function LocalEdgeCore_validateExposureHostnames(manifest: LocalEdgeCore_
     try {
       host = LocalEdgeCore_exposureAppHost(settings, app);
     } catch (error) {
-      problems.push(`${app.id}: ${error instanceof Error ? error.message : String(error)}`);
+      problems.push(`${who}: ${LocalEdgeCore_hostBuildProblem(error)}`);
       continue;
     }
-    problems.push(...LocalEdgeCore_checkHostnameLabels(host).map((p) => `${app.id}: ${p}`));
+    const hostProblems = LocalEdgeCore_checkHostnameLabels(host);
+    problems.push(...hostProblems.map((p) => `${who}: ${p}`));
+    // An exact `host` already passed the value check above. A built host is named only if it passes the label checks.
+    const hostName = app.host !== undefined || hostProblems.length === 0 ? host : `<${LocalEdgeCore_messageInputSize(host)}>`;
     const [left, ...restLabels] = host.split(".");
     if (left === "*" || !wildcardParents.has(restLabels.join("."))) {
-      problems.push(`${app.id}: ${host} is not directly under ${wildcards.join(" or ")}`);
+      problems.push(`${who}: ${hostName} is not directly under ${wildcardNames}`);
     }
     const other = seen.get(host);
     if (other !== undefined) {
-      problems.push(`${app.id}: ${host} is already used by ${other}`);
+      problems.push(`${who}: ${hostName} is already used by ${LocalEdgeCore_messageAppLabel(other)}`);
     }
     seen.set(host, app.id);
   }
   return problems;
 }
+
+/** Longest folder path a message will repeat. Longer paths are described by their length only. */
+const LOCAL_EDGE_CORE_PATH_NAME_MAX_LENGTH = 256;
 
 /** Highest valid port. */
 const LOCAL_EDGE_CORE_PORT_MAX = 65535;
@@ -712,7 +769,7 @@ function LocalEdgeCore_listenerProblems(
   const seen = new Set<number>();
   const appPorts = LocalEdgeCore_appPorts(manifest);
   for (const listener of settings.listeners) {
-    const label = `hostnames.listeners port ${String(listener.port)}`;
+    const label = `hostnames.listeners port ${LocalEdgeCore_messageNumber(listener.port)}`;
     if (!LocalEdgeCore_exposureIsPort(listener.port)) {
       problems.push(`${label} is not a valid TCP port`);
       continue;
@@ -727,12 +784,12 @@ function LocalEdgeCore_listenerProblems(
       problems.push(`${label} is also an app port`);
     }
     if (listener.clientPort !== undefined && !LocalEdgeCore_exposureIsPort(listener.clientPort)) {
-      problems.push(`${label} has an invalid clientPort ${String(listener.clientPort)}`);
+      problems.push(`${label} has an invalid clientPort ${LocalEdgeCore_messageNumber(listener.clientPort)}`);
     }
     seen.add(listener.port);
   }
   if (!seen.has(settings.routerPort)) {
-    problems.push(`hostnames.listeners must include routerPort ${String(settings.routerPort)}`);
+    problems.push(`hostnames.listeners must include routerPort ${LocalEdgeCore_messageNumber(settings.routerPort)}`);
   }
   return problems;
 }
@@ -757,7 +814,7 @@ function LocalEdgeCore_streamProblems(
     return [];
   }
   const problems: string[] = [];
-  const label = `hostnames.stream port ${String(stream.port)}`;
+  const label = `hostnames.stream port ${LocalEdgeCore_messageNumber(stream.port)}`;
   if (!LocalEdgeCore_exposureIsPort(stream.port)) {
     problems.push(`${label} is not a valid TCP port`);
   } else {
@@ -771,30 +828,34 @@ function LocalEdgeCore_streamProblems(
       problems.push(`${label} is also an app port`);
     }
   }
+  // Routes are named by position: a route's server name is raw input until the key check below.
   const upstreams = [
-    ...stream.routes.map((route) => ({ what: `route ${route.serverName}`, value: route.upstream })),
+    ...stream.routes.map((route, index) => ({ what: `route ${String(index + 1)}`, value: route.upstream })),
     { what: "default", value: stream.defaultUpstream },
   ];
   for (const { what, value } of upstreams) {
     const upstream = LocalEdgeCore_parseUpstream(value);
     if (upstream === null) {
-      problems.push(`hostnames.stream ${what} upstream "${value}" must be host:port`);
+      problems.push(`hostnames.stream ${what} upstream (${LocalEdgeCore_messageInputSize(value)}) must be host:port`);
     } else if (upstream.host === LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST && upstream.port === stream.port) {
       problems.push(`hostnames.stream ${what} upstream points back at the stream listener`);
     }
   }
-  const keys = new Set<string>();
-  for (const route of stream.routes) {
+  const keys = new Map<string, number>();
+  for (const [index, route] of stream.routes.entries()) {
+    const routeName = `hostnames.stream route ${String(index + 1)}`;
     if (!/^[^\s;{}'"#]+$/.test(route.serverName) || route.serverName === "default") {
-      problems.push(`hostnames.stream route "${route.serverName}" is not a usable map key`);
+      problems.push(`${routeName} (server name of ${LocalEdgeCore_messageInputSize(route.serverName)}) is not a usable map key`);
     }
-    if (keys.has(route.serverName)) {
-      problems.push(`hostnames.stream route "${route.serverName}" is listed twice`);
+    const first = keys.get(route.serverName);
+    if (first !== undefined) {
+      problems.push(`${routeName} has the same server name as route ${String(first)}`);
+    } else {
+      keys.set(route.serverName, index + 1);
     }
-    keys.add(route.serverName);
   }
   if (stream.connectTimeout !== undefined && !/^\d+(ms|s|m)?$/.test(stream.connectTimeout)) {
-    problems.push(`hostnames.stream connectTimeout "${stream.connectTimeout}" is not an nginx time`);
+    problems.push(`hostnames.stream connectTimeout (${LocalEdgeCore_messageInputSize(stream.connectTimeout)}) is not an nginx time`);
   }
   return problems;
 }
@@ -1048,13 +1109,16 @@ export type LocalEdgeCore_HostnamesBackendOptions = {
 export function LocalEdgeCore_privateDirProblems(dir: string, probe: LocalEdgeCore_PrivateDirProbe): string[] {
   const seen = probe(dir);
   const problems: string[] = [];
+  // The folder is named only once it passed the path check; the git root is one of its parents.
+  const named = LocalEdgeCore_nginxPathProblem("dir", dir) === null && dir.length <= LOCAL_EDGE_CORE_PATH_NAME_MAX_LENGTH;
+  const dirName = named ? dir : `<folder, ${LocalEdgeCore_messageInputSize(dir)}>`;
   if (!seen.exists) {
-    problems.push(`${dir} does not exist yet; create it with mode 0700`);
+    problems.push(`${dirName} does not exist yet; create it with mode 0700`);
   } else if (seen.mode !== 0o700) {
-    problems.push(`${dir} is mode ${(seen.mode ?? 0).toString(8)}, want 700`);
+    problems.push(`${dirName} is mode ${(seen.mode ?? 0).toString(8)}, want 700`);
   }
   if (seen.gitRoot !== null) {
-    problems.push(`${dir} is inside the git checkout ${seen.gitRoot}`);
+    problems.push(`${dirName} is inside the git checkout ${named ? seen.gitRoot : "<folder>"}`);
   }
   return problems;
 }

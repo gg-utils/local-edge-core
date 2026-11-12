@@ -17,6 +17,12 @@
 
 import { spawnSync } from "node:child_process";
 
+import {
+  LocalEdgeCore_messageAppLabel,
+  LocalEdgeCore_messageInputSize,
+  LocalEdgeCore_messageNumber,
+} from "./safe-message.js";
+
 /** Loopback host every exposure target must use. Apps never bind to a public or tailnet address. */
 export const LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST = "127.0.0.1";
 
@@ -448,38 +454,40 @@ export function LocalEdgeCore_validateExposureManifest(
 
   for (const port of manifest.protectedPorts) {
     if (!LocalEdgeCore_exposureIsPort(port)) {
-      problems.push(`protected port ${String(port)} is not a valid TCP port`);
+      problems.push(`protected port ${LocalEdgeCore_messageNumber(port)} is not a valid TCP port`);
     }
   }
 
   if (manifest.hostname !== undefined && !LocalEdgeCore_exposureIsDnsName(manifest.hostname)) {
-    problems.push(`hostname ${JSON.stringify(manifest.hostname)} is not a lowercase DNS name`);
+    problems.push(`hostname (${LocalEdgeCore_messageInputSize(manifest.hostname)}) is not a lowercase DNS name`);
   }
   if (manifest.rootZone !== undefined && !LocalEdgeCore_exposureIsDnsName(manifest.rootZone)) {
-    problems.push(`root zone ${JSON.stringify(manifest.rootZone)} is not a lowercase DNS name`);
+    problems.push(`root zone (${LocalEdgeCore_messageInputSize(manifest.rootZone)}) is not a lowercase DNS name`);
   }
 
-  for (const app of manifest.apps) {
+  for (const [index, app] of manifest.apps.entries()) {
+    // The id is named only after it passed the shape check; otherwise the app is named by position.
+    const who = LocalEdgeCore_messageAppLabel(app.id, index);
     if (app.edgeName !== undefined && !LocalEdgeCore_exposureIsDnsLabel(app.edgeName)) {
-      problems.push(`${app.id}: edge name ${JSON.stringify(app.edgeName)} is not a single lowercase DNS label`);
+      problems.push(`${who}: edge name (${LocalEdgeCore_messageInputSize(app.edgeName)}) is not a single lowercase DNS label`);
     }
-    if (!/^[a-z0-9][a-z0-9-]*$/.test(app.id)) {
-      problems.push(`app id "${app.id}" must be lowercase letters, digits and dashes`);
+    if (typeof app.id !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(app.id)) {
+      problems.push(`${who}: app id (${LocalEdgeCore_messageInputSize(app.id)}) must be lowercase letters, digits and dashes`);
     }
     if (ids.has(app.id)) {
-      problems.push(`app id "${app.id}" is listed twice`);
+      problems.push(`${who}: app id is listed twice`);
     }
     ids.add(app.id);
     if (!LocalEdgeCore_exposureIsPort(app.localPort)) {
-      problems.push(`${app.id}: local port ${String(app.localPort)} is not a valid TCP port`);
+      problems.push(`${who}: local port ${LocalEdgeCore_messageNumber(app.localPort)} is not a valid TCP port`);
     }
     if (app.edgePort !== undefined) {
       if (!LocalEdgeCore_exposureIsPort(app.edgePort)) {
-        problems.push(`${app.id}: edge port ${String(app.edgePort)} is not a valid TCP port`);
+        problems.push(`${who}: edge port ${LocalEdgeCore_messageNumber(app.edgePort)} is not a valid TCP port`);
       } else if (app.enabled) {
         const other = edgePorts.get(app.edgePort);
         if (other !== undefined) {
-          problems.push(`${app.id}: edge port ${String(app.edgePort)} is also used by ${other}`);
+          problems.push(`${who}: edge port ${String(app.edgePort)} is also used by ${LocalEdgeCore_messageAppLabel(other)}`);
         }
         edgePorts.set(app.edgePort, app.id);
       }
@@ -542,7 +550,7 @@ export function LocalEdgeCore_renderExposurePlanText(plan: LocalEdgeCore_Exposur
     const where = action.edgeUrl ? ` ${action.edgeUrl}` : "";
     const target = action.target ? ` -> ${action.target}` : "";
     const needs = action.requires === "none" ? "" : ` [needs ${action.requires}]`;
-    lines.push(`  ${action.kind.padEnd(8)} ${action.appId}${where}${target}${needs}: ${action.reason}`);
+    lines.push(`  ${action.kind.padEnd(8)} ${LocalEdgeCore_messageAppLabel(action.appId)}${where}${target}${needs}: ${action.reason}`);
     if (action.argv) {
       lines.push(`           $ ${action.argv.join(" ")}`);
     }
