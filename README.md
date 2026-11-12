@@ -47,7 +47,7 @@ Skip this package when you need a fully wired CLI around a project config; use
 | `@gg-utils/local-edge-core/network` | Listener, loopback, and probe helpers. |
 | `@gg-utils/local-edge-core/healthcheck` | Healthcheck argv, probe, and summary helpers. |
 | `@gg-utils/local-edge-core/cli` | CLI parsing and dry-run output helpers. |
-| `@gg-utils/local-edge-core/exposure` | Switchable exposure backends: `tailscale-serve-ports` (default), plan-only `tailscale-services` and `wildcard-dns-nginx`. |
+| `@gg-utils/local-edge-core/exposure` | Switchable exposure backends: `tailscale-serve-ports` (default, alias `ports`), plan-only `hostnames` and `tailscale-services`. |
 
 ## Quick Start
 
@@ -91,9 +91,50 @@ and `status`.
 
 | Backend | Needs | What it does |
 |---|---|---|
-| `tailscale-serve-ports` (default) | nothing | One tailnet-only HTTPS port per app: `tailscale serve --bg --https=<port> http://127.0.0.1:<localPort>`. |
+| `tailscale-serve-ports` (default, alias `ports`) | nothing | One tailnet-only HTTPS port per app: `tailscale serve --bg --https=<port> http://127.0.0.1:<localPort>`. |
+| `hostnames` (alias `wildcard-dns-nginx`) | DNS and TLS owner | Plan only. Hosts are `<app>.<projectMachineLabel>.<rootZone>` (main realm) or `<app>--<realm>.<projectMachineLabel>.<rootZone>`, routed by SNI on one loopback nginx port. `apply` refuses. |
 | `tailscale-services` | tailnet admin | Plan only: one `svc:<name>` per app. `apply` refuses. |
-| `wildcard-dns-nginx` | DNS and TLS owner | Plan only: `<name>.<rootZone>` server blocks. `apply` refuses. |
+
+The `hostnames` plan has these steps. One wildcard, `*.<projectMachineLabel>.<rootZone>`, covers
+every app and realm, so there is one DNS record and one certificate. The name pattern is a
+template (`{label}`, `{app}`, `{realm}`, `{projectMachine}`, `{rootZone}`) or a function in config;
+every label is checked (lowercase `a-z0-9-`, at most 63 characters, no `--` at positions 3-4)
+and every host must sit directly under the wildcard; whole names may be at most 253 characters.
+Realm slugs come from branch names and are cut with a short hash when a label would pass 63
+characters. A two-character app name works in the main realm, but in other realms `ab--<realm>`
+would put `--` at positions 3-4, so it is refused with `local-edge-core-hostname-short-app`; give
+such an app an `edgeName` of 1 or 3+ characters, or its own `hostnameTemplate`.
+
+Every path written into `nginx.conf` (pid, logs, `include`, temp, certificate and key) goes through
+one check, `LocalEdgeCore_nginxPathProblem`: it must be absolute and contain no whitespace, quotes,
+`;`, `{`, `}`, `#`, `$`, `\` or control characters. Nothing is quoted or escaped, so an unsafe path
+is refused, never rewritten. `edgePort`, the client port the Serve TCP step maps, must be a valid
+port outside `protectedPorts`.
+
+- One nginx server block per enabled app on `127.0.0.1:<routerPort>`, `server_name` set to its
+  host. `LocalEdgeCore_renderExposureHostnamesNginxConfig` renders the whole `nginx.conf`, with
+  pid, log and temp paths and the certificate from config, and a default server that answers 421.
+  `listeners` makes the router listen on several loopback ports; each gets the 421 default and
+  every host block, and `clientPort` sets the port written into `X-Forwarded-Host` and
+  `X-Forwarded-Port` for requests on that listener (maps on `$server_port` when they differ).
+- An optional SNI stream router (`stream`): a loopback `ssl_preread` listener in the same nginx that
+  sends matching names (for example `LocalEdgeCore_sniZoneSuffixPattern(rootZone)`) to a router
+  listener and anything else to a default upstream, without terminating TLS. Pointing a tailnet
+  port at it is an owner step the backend never applies.
+- An app may set its own `hostnameTemplate` to sit under another label; list that wildcard in
+  `extraWildcardTemplates` and the certificate and DNS steps cover it too.
+- The provided certificate and key, with a check that their folder is 0700 and outside git.
+- lego DNS-01: the install step (listed, never run), `lego run` for the wildcard with the DNS
+  provider's env variable names only (`vercel`: `VERCEL_API_TOKEN`, `VERCEL_TEAM_ID`), and the
+  renewal step (the same `lego run`, which renews only near expiry).
+- The wildcard `A`/`AAAA` records, from config or `tailscale status --json`; a noop when the
+  config says the owner reports them live.
+- A raw-TCP Serve mapping of the router port: `tailscale serve --bg --tcp=<port> tcp://127.0.0.1:<port>`.
+  `status` reads `serve status --json` and reports each app `exposed` when that port forwards to
+  the router, `missing` when it is unmapped and `conflict` when it is mapped to anything else.
+
+Nothing in the plan is run: the backend issues no certificates, edits no DNS, starts no nginx and
+changes no Serve mapping. It refuses a protected or non-loopback router port.
 
 Guards in `tailscale-serve-ports`:
 

@@ -1,5 +1,5 @@
 /**
- * @fileoverview Verifies the plan-only exposure backends and the backend registry: plans are
+ * @fileoverview Verifies the plan-only services backend and the backend registry: plans are
  * printed with what they need, and `apply()` always refuses.
  *
  * @testing Node test runner (tsx): npm run test -- src/exposure-plan-only.unit.test.ts
@@ -13,7 +13,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { LocalEdgeCore_ExposureManifest } from "./exposure.js";
-import { LocalEdgeCore_renderExposurePlanText } from "./exposure.js";
 import {
   LOCAL_EDGE_CORE_DEFAULT_EXPOSURE_BACKEND,
   LocalEdgeCore_createExposureBackend,
@@ -43,43 +42,12 @@ void test("tailscale-services plans svc:<name> steps that need a tailnet admin",
   assert.equal(backend.remove(manifest, { apply: true }).ok, false);
 });
 
-void test("wildcard-dns-nginx plans a server block per app that needs the DNS and TLS owner", () => {
-  const backend = LocalEdgeCore_createExposureBackend("wildcard-dns-nginx");
-  const plan = backend.plan(manifest);
-  assert.equal(plan.actions[0]?.requires, "dns-tls-owner");
-  assert.equal(plan.actions[0]?.edgeUrl, "https://auth.dev.example.test");
-  assert.match(plan.actions[0]?.detail ?? "", /server_name auth\.dev\.example\.test;/);
-  assert.match(LocalEdgeCore_renderExposurePlanText(plan), /needs dns-tls-owner/);
-  assert.equal(backend.apply(plan, { apply: true }).ok, false);
-  assert.deepEqual(backend.status(manifest).map((r) => r.state), ["unknown", "disabled"]);
-});
-
 void test("registry defaults to tailscale-serve-ports and rejects unknown names", () => {
   assert.equal(LOCAL_EDGE_CORE_DEFAULT_EXPOSURE_BACKEND, "tailscale-serve-ports");
   assert.equal(LocalEdgeCore_isExposureBackendName("tailscale-serve-ports"), true);
   assert.equal(LocalEdgeCore_isExposureBackendName("serve-funnel"), false);
   assert.throws(() => LocalEdgeCore_createExposureBackend("serve-funnel"), /unknown exposure backend/);
-});
-
-void test("wildcard-dns-nginx refuses unsafe edge names and root zones before rendering", () => {
-  const backend = LocalEdgeCore_createExposureBackend("wildcard-dns-nginx");
-  const unsafe: LocalEdgeCore_ExposureManifest[] = [
-    { ...manifest, apps: [{ id: "auth", enabled: true, localPort: 4300, edgeName: "auth;\n  return 200 x" }] },
-    { ...manifest, apps: [{ id: "auth", enabled: true, localPort: 4300, edgeName: "a.b" }] },
-    { ...manifest, apps: [{ id: "auth", enabled: true, localPort: 4300, edgeName: "Auth" }] },
-    { ...manifest, rootZone: "dev.example.test;\n  include /x" },
-    { ...manifest, rootZone: "dev example.test" },
-    { ...manifest, rootZone: `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(63)}` },
-    { ...manifest, apps: [{ id: "auth-", enabled: true, localPort: 4300 }] },
-    { ...manifest, rootZone: `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(57)}` },
-  ];
-  for (const candidate of unsafe) {
-    const plan = backend.plan(candidate);
-    assert.equal(plan.actions[0]?.kind, "refuse", JSON.stringify(candidate));
-    assert.equal(plan.actions[0]?.detail, undefined);
-    assert.doesNotMatch(LocalEdgeCore_renderExposurePlanText(plan), /^\s*(?:return 200|include \/x)/m);
-  }
-  const ok = backend.plan({ ...manifest, rootZone: `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(56)}` });
-  assert.equal(ok.actions[0]?.edgeUrl?.length, "https://".length + 253);
-  assert.equal(ok.actions[0]?.kind, "manual");
+  assert.equal(LocalEdgeCore_createExposureBackend("ports").name, "tailscale-serve-ports");
+  assert.equal(LocalEdgeCore_createExposureBackend("hostnames").name, "hostnames");
+  assert.equal(LocalEdgeCore_createExposureBackend("wildcard-dns-nginx").name, "hostnames");
 });

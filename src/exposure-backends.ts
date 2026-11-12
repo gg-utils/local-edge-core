@@ -1,8 +1,8 @@
 /**
  * @fileoverview Exposure backend registry: picks a backend by name so the choice is config, not code.
  *
- * `tailscale-serve-ports` is the default because it needs no admin. The other names build
- * plan-only backends whose `apply()` refuses.
+ * `tailscale-serve-ports` (config alias `ports`) is the default because it needs no admin.
+ * `hostnames` and `tailscale-services` are plan-only backends whose `apply()` refuses.
  *
  * @testing Node test runner (tsx): npm run test -- src/exposure-plan-only.unit.test.ts
  *
@@ -13,10 +13,13 @@
 
 import type { LocalEdgeCore_ExposureBackend, LocalEdgeCore_ExposureCommandRunner } from "./exposure.js";
 import {
+  type LocalEdgeCore_HostnamesBackendOptions,
+  LOCAL_EDGE_CORE_HOSTNAMES_BACKEND,
+  LocalEdgeCore_createHostnamesBackend,
+} from "./exposure-hostnames.js";
+import {
   LOCAL_EDGE_CORE_TAILSCALE_SERVICES_BACKEND,
-  LOCAL_EDGE_CORE_WILDCARD_DNS_NGINX_BACKEND,
   LocalEdgeCore_createTailscaleServicesBackend,
-  LocalEdgeCore_createWildcardDnsNginxBackend,
 } from "./exposure-plan-only.js";
 import {
   LOCAL_EDGE_CORE_TAILSCALE_SERVE_PORTS_BACKEND,
@@ -26,9 +29,32 @@ import {
 /** Backend names known to the registry, default first. */
 export const LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES = [
   LOCAL_EDGE_CORE_TAILSCALE_SERVE_PORTS_BACKEND,
+  LOCAL_EDGE_CORE_HOSTNAMES_BACKEND,
   LOCAL_EDGE_CORE_TAILSCALE_SERVICES_BACKEND,
-  LOCAL_EDGE_CORE_WILDCARD_DNS_NGINX_BACKEND,
 ] as const;
+
+/**
+ * Short config names. `ports` and `hostnames` are what a config sets as `backend`;
+ * `wildcard-dns-nginx` is kept as an alias of `hostnames`.
+ */
+export const LOCAL_EDGE_CORE_EXPOSURE_BACKEND_ALIASES: Readonly<Record<string, LocalEdgeCore_ExposureBackendName>> = {
+  ports: LOCAL_EDGE_CORE_TAILSCALE_SERVE_PORTS_BACKEND,
+  "wildcard-dns-nginx": LOCAL_EDGE_CORE_HOSTNAMES_BACKEND,
+};
+
+/**
+ * Resolves an alias to its backend name; returns the input when it is not an alias.
+ *
+ * @param name - Name from config.
+ * @returns The registered name for an alias (`ports`, `wildcard-dns-nginx`), otherwise `name` unchanged.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_resolveExposureBackendName("ports"); // "tailscale-serve-ports"
+ * ```
+ */
+export function LocalEdgeCore_resolveExposureBackendName(name: string): string {
+  return LOCAL_EDGE_CORE_EXPOSURE_BACKEND_ALIASES[name] ?? name;
+}
 
 /** One of the registered backend names. */
 export type LocalEdgeCore_ExposureBackendName = (typeof LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES)[number];
@@ -51,7 +77,9 @@ export const LOCAL_EDGE_CORE_DEFAULT_EXPOSURE_BACKEND: LocalEdgeCore_ExposureBac
 export function LocalEdgeCore_isExposureBackendName(
   name: string,
 ): name is LocalEdgeCore_ExposureBackendName {
-  return (LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES as readonly string[]).includes(name);
+  return (LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES as readonly string[]).includes(
+    LocalEdgeCore_resolveExposureBackendName(name),
+  );
 }
 
 /**
@@ -72,23 +100,24 @@ export function LocalEdgeCore_createExposureBackend(
   options: {
     runner?: LocalEdgeCore_ExposureCommandRunner | undefined;
     tailscaleBin?: string | undefined;
-  } = {},
+  } & LocalEdgeCore_HostnamesBackendOptions = {},
 ): LocalEdgeCore_ExposureBackend {
-  switch (name) {
+  switch (LocalEdgeCore_resolveExposureBackendName(name)) {
     case LOCAL_EDGE_CORE_TAILSCALE_SERVE_PORTS_BACKEND:
       return LocalEdgeCore_createTailscaleServePortsBackend(options);
     case LOCAL_EDGE_CORE_TAILSCALE_SERVICES_BACKEND:
       return LocalEdgeCore_createTailscaleServicesBackend(options);
-    case LOCAL_EDGE_CORE_WILDCARD_DNS_NGINX_BACKEND:
-      return LocalEdgeCore_createWildcardDnsNginxBackend();
+    case LOCAL_EDGE_CORE_HOSTNAMES_BACKEND:
+      return LocalEdgeCore_createHostnamesBackend(options);
     default:
       throw new Error(
-        `unknown exposure backend "${name}"; known: ${LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES.join(", ")}`,
+        `unknown exposure backend "${name}"; known: ${[...LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES, ...Object.keys(LOCAL_EDGE_CORE_EXPOSURE_BACKEND_ALIASES)].join(", ")}`,
       );
   }
 }
 
 /* The `./exposure` subpath is the one import consumers need: contract, backends and registry. */
 export * from "./exposure.js";
+export * from "./exposure-hostnames.js";
 export * from "./exposure-plan-only.js";
 export * from "./exposure-tailscale-serve.js";

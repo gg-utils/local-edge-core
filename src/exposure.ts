@@ -37,6 +37,150 @@ export type LocalEdgeCore_ExposureApp = {
    * Off by default: an existing foreign mapping is refused.
    */
   replaceExistingMapping?: boolean | undefined;
+  /**
+   * Extra path routes for name-based backends, in addition to `/` -> `localPort`. Each sends
+   * `path` to `127.0.0.1:<localPort><upstreamPath>`; `upstreamPath` defaults to `path`.
+   */
+  locations?: readonly LocalEdgeCore_ExposureAppLocation[] | undefined;
+  /**
+   * Hostname pattern for this app only, for name-based backends; wins over the settings' pattern.
+   * Same tokens as `hostnameTemplate`. The host must still sit directly under a configured wildcard.
+   */
+  hostnameTemplate?: string | undefined;
+};
+
+/** One loopback port the router's HTTP server blocks listen on. */
+export type LocalEdgeCore_ExposureRouterListener = {
+  port: number;
+  /** Terminate TLS on this port. Default true. */
+  ssl?: boolean | undefined;
+  /**
+   * Port clients see for requests on this listener, written into `X-Forwarded-Host` and
+   * `X-Forwarded-Port`. Default: `edgePort` for `routerPort`, else the listener's own port.
+   */
+  clientPort?: number | undefined;
+};
+
+/** One SNI route of the stream router. */
+export type LocalEdgeCore_ExposureStreamRoute = {
+  /** `map` key matched against the SNI name: an exact name or an nginx regex such as `~\.example\.test$`. */
+  serverName: string;
+  /** `host:port` the raw TLS stream goes to. */
+  upstream: string;
+};
+
+/**
+ * A raw-TCP listener that reads the SNI name without terminating TLS (`ssl_preread`) and passes the
+ * stream on: matching names to the router's own listeners, anything else to a default upstream.
+ */
+export type LocalEdgeCore_ExposureStreamRouter = {
+  /** Loopback port of the stream listener. */
+  port: number;
+  routes: readonly LocalEdgeCore_ExposureStreamRoute[];
+  /** `host:port` for names no route matches. */
+  defaultUpstream: string;
+  /** nginx `proxy_connect_timeout`. Default `5s`. */
+  connectTimeout?: string | undefined;
+};
+
+/** One extra path route of an app. */
+export type LocalEdgeCore_ExposureAppLocation = {
+  path: string;
+  localPort: number;
+  upstreamPath?: string | undefined;
+};
+
+/** Parts a hostname pattern receives for one app. */
+export type LocalEdgeCore_ExposureHostnameParts = {
+  app: string;
+  realm: string;
+  mainRealm: string;
+  projectMachineLabel: string;
+  rootZone: string;
+};
+
+/**
+ * Settings for the `hostnames` backend. Names are public DNS under a zone the owner controls;
+ * the default pattern is `<app>.<projectMachineLabel>.<rootZone>` for the main realm and
+ * `<app>--<realm>.<projectMachineLabel>.<rootZone>` otherwise, so one wildcard covers every host.
+ */
+export type LocalEdgeCore_ExposureHostnamesConfig = {
+  /** One DNS label naming the project and machine, for example `proj-node1`. */
+  projectMachineLabel: string;
+  rootZone: string;
+  /** Realm (branch or worktree) name; sanitized into a slug. */
+  realm: string;
+  /** Realm that gets plain `<app>` labels. Defaults to `main`. */
+  mainRealm?: string | undefined;
+  /**
+   * Hostname template with `{app}`, `{realm}`, `{label}`, `{projectMachine}`, `{rootZone}`.
+   * Default `{label}.{projectMachine}.{rootZone}`.
+   */
+  hostnameTemplate?: string | undefined;
+  /** Function form of the pattern; wins over `hostnameTemplate`. */
+  buildHostname?: ((parts: LocalEdgeCore_ExposureHostnameParts) => string) | undefined;
+  /** Wildcard that every host must sit directly under. Default `*.{projectMachine}.{rootZone}`. */
+  wildcardTemplate?: string | undefined;
+  /**
+   * More wildcards hosts may sit under (same tokens as `wildcardTemplate`), for apps whose
+   * `hostnameTemplate` uses another label. The certificate and DNS steps cover every wildcard.
+   */
+  extraWildcardTemplates?: readonly string[] | undefined;
+  /** Loopback router listen host. Must be 127.0.0.1. */
+  routerHost: string;
+  routerPort: number;
+  /** Port clients use, such as a Serve TCP port in front of the router. Defaults to `routerPort`. */
+  edgePort?: number | undefined;
+  /**
+   * Every loopback port the HTTP server blocks listen on. Omitted: one TLS listener on
+   * `routerPort`. When given it must include `routerPort`; each listener gets the 421 default
+   * server and every host block.
+   */
+  listeners?: readonly LocalEdgeCore_ExposureRouterListener[] | undefined;
+  /** Optional SNI stream router in front of the listeners. */
+  stream?: LocalEdgeCore_ExposureStreamRouter | undefined;
+  /** Certificate and key the router uses; kept in a 0700 folder outside any git checkout. */
+  tls: { mode: "provided"; certPath: string; keyPath: string };
+  /** Where the rendered router config lives and what it writes. All paths absolute. */
+  nginx: {
+    confPath: string;
+    pidPath: string;
+    errorLogPath: string;
+    accessLogPath: string;
+    /** Folder for nginx temp files (client bodies, proxy buffers). */
+    tempDir: string;
+    /** `mime.types` file to include. Omitted: no include (the router only proxies). */
+    mimeTypesPath?: string | undefined;
+    /** `worker_connections`. Default 512. */
+    workerConnections?: number | undefined;
+  };
+  /** Plan-only ACME DNS-01 issuing step. Omit to leave issuing out of the plan. */
+  acme?:
+    | {
+        client: "lego";
+        dnsProvider: string;
+        dataDir: string;
+        /** ACME account email. Left out of the command when omitted. */
+        email?: string | undefined;
+        /** ACME directory URL. lego's default when omitted. */
+        server?: string | undefined;
+        keyType?: string | undefined;
+        /** Script lego runs after issuing; copies the cert and key to `tls` paths. */
+        deployHook?: string | undefined;
+        /** Wrapper the owner runs to issue and renew (sources the token file, then runs lego). */
+        runScript?: string | undefined;
+        /** How renewal is scheduled, for the plan text (for example a launch agent). */
+        renewal?: string | undefined;
+        /** Install step shown in the plan, never run. Defaults to `brew install lego`. */
+        installArgv?: readonly string[] | undefined;
+      }
+    | undefined;
+  /** Tailnet addresses for the wildcard records. Read from `tailscale status --json` when omitted. */
+  addresses?: { ipv4?: string | undefined; ipv6?: string | undefined } | undefined;
+  /** The owner reports the wildcard records are live; the DNS step becomes a noop. */
+  dnsLive?: boolean | undefined;
+  /** Plan a tailnet raw-TCP Serve mapping of the router port. Defaults to true. */
+  tailnetTcp?: boolean | undefined;
 };
 
 /** Backend-neutral manifest consumed by every exposure backend. */
@@ -48,6 +192,8 @@ export type LocalEdgeCore_ExposureManifest = {
   hostname?: string | undefined;
   /** Root DNS zone for name-based backends that build `<name>.<zone>` hosts. */
   rootZone?: string | undefined;
+  /** Settings for the hostname backend; required only when that backend is selected. */
+  hostnames?: LocalEdgeCore_ExposureHostnamesConfig | undefined;
 };
 
 /** What the backend would do (or refuses to do) for one app. */

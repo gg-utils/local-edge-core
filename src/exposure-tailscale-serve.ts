@@ -352,7 +352,7 @@ export function LocalEdgeCore_planTailscaleServeApp(options: {
     return { ...base, kind: "skip", reason: "app is disabled" };
   }
   if (app.edgePort === undefined) {
-    return { ...base, kind: "refuse", reason: "app has no edge port" };
+    return { ...base, kind: "skip", reason: "app has no edge port; not served by this backend" };
   }
   const edgeUrl = LocalEdgeCore_edgeUrl(hostname, app.edgePort) ?? undefined;
   const withUrl = { ...base, edgeUrl };
