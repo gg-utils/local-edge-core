@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  LOCAL_EDGE_CORE_FALLBACK_TAILNET_SUFFIX,
   LocalEdgeCore_detectTailnetSuffix,
   LocalEdgeCore_ensureTlsFiles,
   LocalEdgeCore_mkcertTrustDetected,
@@ -323,8 +324,8 @@ void test("LocalEdgeCore_detectTailnetSuffix prefers CurrentTailnet MagicDNS suf
         {
           status: 0,
           stdout: JSON.stringify({
-            CurrentTailnet: { MagicDNSSuffix: "Current.Example.TS.Net " },
-            MagicDNSSuffix: "global.example.ts.net",
+            CurrentTailnet: { MagicDNSSuffix: "Current.Tailnet.Example " },
+            MagicDNSSuffix: "global.tailnet.example",
           }),
         },
       ],
@@ -332,7 +333,7 @@ void test("LocalEdgeCore_detectTailnetSuffix prefers CurrentTailnet MagicDNS suf
     existingCommands: ["tailscale"],
   });
 
-  assert.equal(LocalEdgeCore_detectTailnetSuffix(dependencies), "current.example.ts.net");
+  assert.equal(LocalEdgeCore_detectTailnetSuffix(dependencies), "current.tailnet.example");
 });
 
 void test("LocalEdgeCore_detectTailnetSuffix falls back to top-level MagicDNS suffix", () => {
@@ -343,7 +344,7 @@ void test("LocalEdgeCore_detectTailnetSuffix falls back to top-level MagicDNS su
         {
           status: 0,
           stdout: JSON.stringify({
-            MagicDNSSuffix: "Global.Example.TS.Net",
+            MagicDNSSuffix: "Global.Tailnet.Example",
           }),
         },
       ],
@@ -351,7 +352,7 @@ void test("LocalEdgeCore_detectTailnetSuffix falls back to top-level MagicDNS su
     existingCommands: ["tailscale"],
   });
 
-  assert.equal(LocalEdgeCore_detectTailnetSuffix(dependencies), "global.example.ts.net");
+  assert.equal(LocalEdgeCore_detectTailnetSuffix(dependencies), "global.tailnet.example");
 });
 
 void test("LocalEdgeCore_resolveTailnetSuffix preserves explicit values and resolves auto", () => {
@@ -362,7 +363,7 @@ void test("LocalEdgeCore_resolveTailnetSuffix preserves explicit values and reso
         {
           status: 0,
           stdout: JSON.stringify({
-            MagicDNSSuffix: "Auto.Example.TS.Net",
+            MagicDNSSuffix: "Auto.Tailnet.Example",
           }),
         },
       ],
@@ -371,13 +372,13 @@ void test("LocalEdgeCore_resolveTailnetSuffix preserves explicit values and reso
   });
 
   assert.equal(
-    LocalEdgeCore_resolveTailnetSuffix(" Explicit.Example.TS.Net ", dependencies),
-    "explicit.example.ts.net",
+    LocalEdgeCore_resolveTailnetSuffix(" Explicit.Tailnet.Example ", dependencies),
+    "explicit.tailnet.example",
   );
-  assert.equal(LocalEdgeCore_resolveTailnetSuffix("auto", dependencies), "auto.example.ts.net");
+  assert.equal(LocalEdgeCore_resolveTailnetSuffix("auto", dependencies), "auto.tailnet.example");
 });
 
-void test("LocalEdgeCore_resolveTailnetSuffix falls back to the legacy default", () => {
+void test("LocalEdgeCore_resolveTailnetSuffix falls back to the reserved placeholder suffix", () => {
   assert.equal(
     LocalEdgeCore_resolveTailnetSuffix(
       "auto",
@@ -385,6 +386,7 @@ void test("LocalEdgeCore_resolveTailnetSuffix falls back to the legacy default",
         existingCommands: [],
       }),
     ),
-    "gannet-frog.ts.net",
+    "tailnet.example",
   );
+  assert.equal(LOCAL_EDGE_CORE_FALLBACK_TAILNET_SUFFIX, "tailnet.example");
 });
