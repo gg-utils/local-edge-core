@@ -12,7 +12,6 @@
  * @see scripts/local-edge/config.ts - Root local-edge adapter config that composes these primitives when translating env text into typed adapter settings.
  * @documentation reviewed=2026-05-22 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
-import { LocalEdgeCore_messageValue } from "./safe-message.js";
 /** Normalizes text into a DNS- and path-safe slug for routing identifiers. */
 export function LocalEdgeCore_normalizeSlug(value) {
     return value
@@ -33,8 +32,7 @@ export function LocalEdgeCore_normalizeSlugOrFallback(options) {
 export function LocalEdgeCore_parseRequiredPositiveInt(options) {
     const parsed = Number.parseInt(options.rawValue, 10);
     if (!Number.isFinite(parsed) || parsed < 1) {
-        throw new Error(`[local-edge:config] ${options.envName} must be a positive integer. ` +
-            `Received '${LocalEdgeCore_messageValue(options.rawValue)}'.`);
+        throw new Error(`[local-edge:config] ${options.envName} must be a positive integer.`);
     }
     return parsed;
 }
@@ -51,7 +49,7 @@ export function LocalEdgeCore_parseOptionalBooleanFlag(options) {
         return false;
     }
     throw new Error(`[local-edge:config] ${options.envName} must be a boolean flag ` +
-        `(true/false, 1/0, yes/no, on/off). Received '${LocalEdgeCore_messageValue(options.rawValue)}'.`);
+        `(true/false, 1/0, yes/no, on/off).`);
 }
 /** Validates a trimmed non-empty host string or IP literal from env/config text. */
 export function LocalEdgeCore_parseRequiredHostOrIp(options) {

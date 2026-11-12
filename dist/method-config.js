@@ -17,7 +17,7 @@ import path from "node:path";
 import { LocalEdgeCore_normalizeSlugOrFallback } from "./config-primitives.js";
 import { LocalEdgeCore_normalizeLegacyArtifactPath, LocalEdgeCore_normalizeMachineRootDir, } from "./paths.js";
 import { LocalEdgeCore_buildDockerComposeDownCommand, LocalEdgeCore_buildDockerComposeUpDetachedCommand, } from "./docker-lifecycle.js";
-import { LocalEdgeCore_messageValue, LocalEdgeCore_messageWord } from "./safe-message.js";
+import { LocalEdgeCore_messageWord } from "./safe-message.js";
 /** Normalizes a local-edge route/config segment with the legacy `default` empty fallback. */
 export function LocalEdgeCore_slugifySegment(rawValue) {
     return LocalEdgeCore_normalizeSlugOrFallback({
@@ -109,7 +109,7 @@ export function LocalEdgeCore_resolveConfiguredMethods(options) {
     if (options.singleMethodMode && resolved.length !== 1) {
         return {
             ok: false,
-            message: `${options.envName} must contain exactly one method in single-method mode. Current value='${LocalEdgeCore_messageValue(methodsCsv)}'.`,
+            message: `${options.envName} must contain exactly one method in single-method mode.`,
         };
     }
     return { ok: true, methodsCsv: resolved.join(",") };
@@ -129,7 +129,7 @@ export function LocalEdgeCore_resolvePrimaryMethod(options) {
     })) {
         return {
             ok: false,
-            message: `${options.primaryEnvName}='${LocalEdgeCore_messageWord(configuredPrimary)}' is unsupported. Allowed value: ${options.supportedMethods.join(", ")}.`,
+            message: `${options.primaryEnvName} is unsupported. Allowed value: ${options.supportedMethods.join(", ")}.`,
         };
     }
     const configuredMethodsResult = options.configuredMethodsResult;
@@ -142,7 +142,7 @@ export function LocalEdgeCore_resolvePrimaryMethod(options) {
     }
     return {
         ok: false,
-        message: `${options.primaryEnvName}='${LocalEdgeCore_messageWord(configuredPrimary)}' is not present in ${options.methodsEnvName}='${LocalEdgeCore_messageValue(methodsCsv)}'.`,
+        message: `${options.primaryEnvName} is not present in ${options.methodsEnvName}.`,
     };
 }
 /** Resolves the nginx-docker listen port using historical `parseInt` semantics. */

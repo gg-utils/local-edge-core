@@ -68,10 +68,6 @@ export declare function LocalEdgeCore_messageName(value: unknown, shape: RegExp,
  * ```
  */
 export declare function LocalEdgeCore_messageQuoted(value: unknown, shape: RegExp, maxLength?: number): string;
-/** A short configuration value such as `3000`, `yes` or `nginx-docker,caddy`. */
-export declare const LOCAL_EDGE_CORE_MESSAGE_VALUE_SHAPE: RegExp;
-/** Longest configuration value a message will repeat. Longer text is described by its length only. */
-export declare const LOCAL_EDGE_CORE_MESSAGE_VALUE_MAX_LENGTH = 24;
 /**
  * Names a command-line option in a message: the option itself when it looks like one (`--method`),
  * otherwise `<N characters>`.
@@ -114,20 +110,6 @@ export declare function LocalEdgeCore_messageWord(value: unknown): string;
  * ```
  */
 export declare function LocalEdgeCore_messageWords(values: readonly unknown[]): string;
-/**
- * Names a short configuration value in a message (a number, a flag, a method list): the value
- * itself when it is at most 24 plain characters, otherwise `<N characters>`.
- *
- * @param value - The raw environment or option value.
- * @returns Text that is safe to put in a message.
- *
- * @example
- * ```typescript
- * LocalEdgeCore_messageValue("abc"); // "abc"
- * LocalEdgeCore_messageValue("p".repeat(80)); // "<80 characters>"
- * ```
- */
-export declare function LocalEdgeCore_messageValue(value: unknown): string;
 /**
  * Returns a number for a message, or `<not a number>` for any other input. A number is bounded
  * text; a value that only claims to be one (a string, an object) is never repeated.

@@ -19,7 +19,7 @@ import {
   LocalEdgeCore_logFormatterEnabled,
   LocalEdgeCore_resolveLogOutputFormat,
 } from "./log-output.js";
-import { LocalEdgeCore_messageValue, LocalEdgeCore_messageWord } from "./safe-message.js";
+import { LocalEdgeCore_messageWord } from "./safe-message.js";
 
 /** Prefix for parent-process lines mirrored to run logs during shutdown/cleanup. */
 export const LOCAL_EDGE_CORE_WITH_LOGS_SHUTDOWN_PREFIX = "[local-edge:shutdown] " as const;
@@ -181,7 +181,7 @@ function LocalEdgeCore_withLogsParseExitCodeFlag(rest: readonly string[]): numbe
   });
   const exitCode = Number.parseInt(raw, 10);
   if (!Number.isFinite(exitCode)) {
-    throw new LocalEdgeCoreWithLogsCliError(`Invalid --exit-code: ${LocalEdgeCore_messageValue(raw)}`);
+    throw new LocalEdgeCoreWithLogsCliError(`Invalid --exit-code: ${LocalEdgeCore_messageWord(raw)}`);
   }
   return exitCode;
 }

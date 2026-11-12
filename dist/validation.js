@@ -17,21 +17,20 @@
  */
 import { existsSync } from "node:fs";
 import { LocalEdgeCore_isTruthy } from "./log-output.js";
-import { LocalEdgeCore_messageValue } from "./safe-message.js";
 /** Validates that `value` is a numeric TCP port in range 1..65535. */
 export function LocalEdgeCore_validatePort(options) {
     const { label, value } = options;
     if (!/^\d+$/.test(value)) {
         return {
             ok: false,
-            message: `${label} must be numeric. Current value='${LocalEdgeCore_messageValue(value)}'.`,
+            message: `${label} must be a whole number from 1 to 65535.`,
         };
     }
     const parsed = Number.parseInt(value, 10);
     if (parsed < 1 || parsed > 65535) {
         return {
             ok: false,
-            message: `${label} must be in range 1..65535. Current value='${LocalEdgeCore_messageValue(value)}'.`,
+            message: `${label} must be a whole number from 1 to 65535.`,
         };
     }
     return { ok: true };
@@ -42,14 +41,14 @@ export function LocalEdgeCore_validatePositiveInteger(options) {
     if (!/^\d+$/.test(value)) {
         return {
             ok: false,
-            message: `${label} must be numeric. Current value='${LocalEdgeCore_messageValue(value)}'.`,
+            message: `${label} must be a whole number of at least 1.`,
         };
     }
     const parsed = Number.parseInt(value, 10);
     if (parsed < 1) {
         return {
             ok: false,
-            message: `${label} must be >= 1. Current value='${LocalEdgeCore_messageValue(value)}'.`,
+            message: `${label} must be a whole number of at least 1.`,
         };
     }
     return { ok: true };

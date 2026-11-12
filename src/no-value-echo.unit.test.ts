@@ -63,14 +63,19 @@ import {
   LocalEdgeCore_messageAppLabel,
   LocalEdgeCore_messageNumber,
   LocalEdgeCore_messageOption,
-  LocalEdgeCore_messageValue,
   LocalEdgeCore_messageWord,
   LocalEdgeCore_messageWords,
 } from "./safe-message.js";
 import { LocalEdgeCore_parseShellShimArgv } from "./shell-shim.js";
 import {
+  LocalEdgeStartupCli_parseCanonicalStart,
   LocalEdgeStartupCli_parseCommand,
+  LocalEdgeStartupCli_parseDoctor,
+  LocalEdgeStartupCli_parseEnsureRunning,
+  LocalEdgeStartupCli_parseInit,
+  LocalEdgeStartupCli_parseSetup,
   LocalEdgeStartupCli_parseStart,
+  LocalEdgeStartupCli_parseStop,
 } from "./startup-cli.js";
 import { LocalEdgeCore_parseStatusCliArgs } from "./status.js";
 import { LocalEdgeCore_parseUrlMatrixCliArgs } from "./url-matrix.js";
@@ -611,10 +616,16 @@ const cases: readonly EchoCase[] = [
     run: (m) =>
       [
         () => LocalEdgeStartupCli_parseCommand(bait(m), []),
-        () => LocalEdgeStartupCli_parseCommand("doctor", [bait(m)]),
         () => LocalEdgeStartupCli_parseCommand("doctor", ["--method", bait(m)]),
         () => LocalEdgeStartupCli_parseStart(["--method", bait(m)]),
+        // Each of the seven parsers has its own unknown-option message.
+        () => LocalEdgeStartupCli_parseDoctor([bait(m)]),
+        () => LocalEdgeStartupCli_parseEnsureRunning([bait(m)]),
+        () => LocalEdgeStartupCli_parseCanonicalStart([bait(m)]),
+        () => LocalEdgeStartupCli_parseInit([bait(m)]),
+        () => LocalEdgeStartupCli_parseSetup([bait(m)]),
         () => LocalEdgeStartupCli_parseStart([bait(m)]),
+        () => LocalEdgeStartupCli_parseStop([bait(m)]),
       ].flatMap((run) => thrown(run)),
   },
   {
@@ -678,6 +689,100 @@ const cases: readonly EchoCase[] = [
       ];
       assert.ok(results.every((result) => !result.ok));
       return [JSON.stringify(results)];
+    },
+  },
+  // --- environment values: never repeated, whatever their length (a short secret is still a secret)
+  {
+    name: "short env value: non-numeric port and integer",
+    marker: "mk67zz",
+    run: (m) => {
+      const results = [
+        LocalEdgeCore_validatePort({ label: "PORT", value: `${m}ab` }),
+        LocalEdgeCore_validatePositiveInteger({ label: "COUNT", value: `${m}ab` }),
+      ];
+      assert.ok(results.every((result) => !result.ok));
+      return [JSON.stringify(results)];
+    },
+  },
+  {
+    name: "short env value: port out of range",
+    marker: "90817263",
+    run: (m) => {
+      const result = LocalEdgeCore_validatePort({ label: "PORT", value: m });
+      assert.equal(result.ok, false);
+      return [JSON.stringify(result)];
+    },
+  },
+  {
+    name: "short env value: integer below one",
+    marker: "00000000",
+    run: (m) => {
+      const result = LocalEdgeCore_validatePositiveInteger({ label: "COUNT", value: m });
+      assert.equal(result.ok, false);
+      return [JSON.stringify(result)];
+    },
+  },
+  {
+    name: "short env value: positive integer that parses to zero",
+    marker: "0",
+    run: () => thrown(() => LocalEdgeCore_parseRequiredPositiveInt({ rawValue: "0", envName: "PORT" })),
+  },
+  {
+    name: "short env value: positive integer that is not a number",
+    marker: "mk68zz",
+    run: (m) => thrown(() => LocalEdgeCore_parseRequiredPositiveInt({ rawValue: `${m}ab`, envName: "PORT" })),
+  },
+  {
+    name: "short env value: boolean flag",
+    marker: "mk69zz",
+    run: (m) => thrown(() => LocalEdgeCore_parseOptionalBooleanFlag({ rawValue: `${m}ab`, envName: "FLAG", defaultValue: false })),
+  },
+  {
+    name: "short env value: methods list in single-method mode",
+    marker: "mk70zz",
+    run: (m) => {
+      const result = LocalEdgeCore_resolveConfiguredMethods({
+        rawMethodsCsv: `nginx-docker,${m}`,
+        supportedMethods: ["nginx-docker", m],
+        defaultMethod: "nginx-docker",
+        envName: "METHODS",
+        unsupportedLegacyEnvKeys: [],
+        singleMethodMode: true,
+      });
+      assert.equal(result.ok, false);
+      return [JSON.stringify(result)];
+    },
+  },
+  {
+    name: "short env value: unsupported primary method",
+    marker: "mk71zz",
+    run: (m) => {
+      const result = LocalEdgeCore_resolvePrimaryMethod({
+        rawPrimaryMethod: `${m}ab`,
+        configuredMethodsResult: { ok: true, methodsCsv: "nginx-docker" },
+        supportedMethods: ["nginx-docker"],
+        defaultMethod: "nginx-docker",
+        primaryEnvName: "PRIMARY",
+        methodsEnvName: "METHODS",
+      });
+      assert.equal(result.ok, false);
+      return [JSON.stringify(result)];
+    },
+  },
+  {
+    name: "short env value: primary method missing from the methods list",
+    marker: "mk72zz",
+    run: (m) => {
+      const result = LocalEdgeCore_resolvePrimaryMethod({
+        rawPrimaryMethod: "other",
+        configuredMethodsResult: { ok: true, methodsCsv: `${m}ab` },
+        supportedMethods: ["nginx-docker", "other"],
+        defaultMethod: "nginx-docker",
+        primaryEnvName: "PRIMARY",
+        methodsEnvName: "METHODS",
+      });
+      assert.equal(result.ok, false);
+      return [JSON.stringify(result)];
     },
   },
   {
@@ -749,8 +854,6 @@ void test("messages still name what is safe to name", () => {
   assert.equal(LocalEdgeCore_messageOption("--token=abc"), "<11 characters>");
   assert.equal(LocalEdgeCore_messageWord("render"), "render");
   assert.equal(LocalEdgeCore_messageWord("x".repeat(49)), "<49 characters>");
-  assert.equal(LocalEdgeCore_messageValue("0"), "0");
-  assert.equal(LocalEdgeCore_messageValue("p".repeat(25)), "<25 characters>");
   assert.equal(LocalEdgeCore_messageWords(["a", "b"]), "a b");
   assert.equal(LocalEdgeCore_messageWords(["a", "b", "c", "d", "e", "f", "g"]), "a b c d e (and 2 more)");
 });

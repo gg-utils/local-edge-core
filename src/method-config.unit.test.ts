@@ -245,7 +245,7 @@ void test("LocalEdgeCore method config resolves primary methods against configur
     {
       ok: false,
       message:
-        "LOCAL_EDGE_PRIMARY_METHOD='unsupported' is unsupported. Allowed value: nginx-docker.",
+        "LOCAL_EDGE_PRIMARY_METHOD is unsupported. Allowed value: nginx-docker.",
     },
   );
 });

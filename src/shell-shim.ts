@@ -14,7 +14,7 @@
  * @documentation reviewed=2026-05-23 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 
-import { LocalEdgeCore_messageOption, LocalEdgeCore_messageValue, LocalEdgeCore_messageWord, LocalEdgeCore_messageWords } from "./safe-message.js";
+import { LocalEdgeCore_messageOption, LocalEdgeCore_messageWord, LocalEdgeCore_messageWords } from "./safe-message.js";
 
 /** Parsed command envelope for the shell-shim compatibility CLI. */
 export type LocalEdgeCore_ShellShimParseResult =
@@ -235,7 +235,7 @@ function LocalEdgeCore_parseShellShimResolveLogColorEnabled(
         isTtyStdout = false;
       } else {
         throw new LocalEdgeCoreShellShimError(
-          `resolve-log-color-enabled requires --is-tty-stdout true|false (got '${LocalEdgeCore_messageValue(raw)}').`,
+          `resolve-log-color-enabled requires --is-tty-stdout true|false (got '${LocalEdgeCore_messageWord(raw)}').`,
         );
       }
       continue;

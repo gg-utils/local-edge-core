@@ -13,7 +13,7 @@
  * @see packages/local-edge-core/src/index.ts - Package public surface re-exporting this shell-shim contract next to other local-edge-core primitives.
  * @documentation reviewed=2026-05-23 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
-import { LocalEdgeCore_messageOption, LocalEdgeCore_messageValue, LocalEdgeCore_messageWord, LocalEdgeCore_messageWords } from "./safe-message.js";
+import { LocalEdgeCore_messageOption, LocalEdgeCore_messageWord, LocalEdgeCore_messageWords } from "./safe-message.js";
 /** Argv parsing failure for shell-shim command contracts. */
 export class LocalEdgeCoreShellShimError extends Error {
     /** Builds an error tagged for shell-shim parser failures. */
@@ -158,7 +158,7 @@ function LocalEdgeCore_parseShellShimResolveLogColorEnabled(rest) {
                 isTtyStdout = false;
             }
             else {
-                throw new LocalEdgeCoreShellShimError(`resolve-log-color-enabled requires --is-tty-stdout true|false (got '${LocalEdgeCore_messageValue(raw)}').`);
+                throw new LocalEdgeCoreShellShimError(`resolve-log-color-enabled requires --is-tty-stdout true|false (got '${LocalEdgeCore_messageWord(raw)}').`);
             }
             continue;
         }

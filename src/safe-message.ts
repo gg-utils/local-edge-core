@@ -98,12 +98,6 @@ export function LocalEdgeCore_messageQuoted(
   return name === value ? `"${name}"` : name;
 }
 
-/** A short configuration value such as `3000`, `yes` or `nginx-docker,caddy`. */
-export const LOCAL_EDGE_CORE_MESSAGE_VALUE_SHAPE = /^[A-Za-z0-9._,:+-]+$/;
-
-/** Longest configuration value a message will repeat. Longer text is described by its length only. */
-export const LOCAL_EDGE_CORE_MESSAGE_VALUE_MAX_LENGTH = 24;
-
 /**
  * Names a command-line option in a message: the option itself when it looks like one (`--method`),
  * otherwise `<N characters>`.
@@ -158,23 +152,6 @@ export function LocalEdgeCore_messageWords(values: readonly unknown[]): string {
   const shown = values.slice(0, LOCAL_EDGE_CORE_MESSAGE_WORDS_MAX_COUNT).map((value) => LocalEdgeCore_messageWord(value));
   const rest = values.length - shown.length;
   return rest > 0 ? `${shown.join(" ")} (and ${String(rest)} more)` : shown.join(" ");
-}
-
-/**
- * Names a short configuration value in a message (a number, a flag, a method list): the value
- * itself when it is at most 24 plain characters, otherwise `<N characters>`.
- *
- * @param value - The raw environment or option value.
- * @returns Text that is safe to put in a message.
- *
- * @example
- * ```typescript
- * LocalEdgeCore_messageValue("abc"); // "abc"
- * LocalEdgeCore_messageValue("p".repeat(80)); // "<80 characters>"
- * ```
- */
-export function LocalEdgeCore_messageValue(value: unknown): string {
-  return LocalEdgeCore_messageName(value, LOCAL_EDGE_CORE_MESSAGE_VALUE_SHAPE, LOCAL_EDGE_CORE_MESSAGE_VALUE_MAX_LENGTH);
 }
 
 /**
