@@ -208,5 +208,5 @@ The extracted scripts currently expect the source-first workspace toolchain.
 Requires Node `>=22.0.0 <27`. Add this dependency; built JavaScript and declarations are included, with no install build step:
 
 ```json
-"@gg-utils/local-edge-core": "git+https://github.com/gg-utils/local-edge-core.git#v0.3.0"
+"@gg-utils/local-edge-core": "git+https://github.com/gg-utils/local-edge-core.git#v0.4.0"
 ```
