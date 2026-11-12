@@ -37,3 +37,7 @@ export function LocalEdgeCore_createExposureBackend(name, options = {}) {
             throw new Error(`unknown exposure backend "${name}"; known: ${LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES.join(", ")}`);
     }
 }
+/* The `./exposure` subpath is the one import consumers need: contract, backends and registry. */
+export * from "./exposure.js";
+export * from "./exposure-plan-only.js";
+export * from "./exposure-tailscale-serve.js";

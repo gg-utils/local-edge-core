@@ -24,3 +24,6 @@ export declare function LocalEdgeCore_createExposureBackend(name: string, option
     runner?: LocalEdgeCore_ExposureCommandRunner | undefined;
     tailscaleBin?: string | undefined;
 }): LocalEdgeCore_ExposureBackend;
+export * from "./exposure.js";
+export * from "./exposure-plan-only.js";
+export * from "./exposure-tailscale-serve.js";

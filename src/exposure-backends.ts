@@ -65,3 +65,8 @@ export function LocalEdgeCore_createExposureBackend(
       );
   }
 }
+
+/* The `./exposure` subpath is the one import consumers need: contract, backends and registry. */
+export * from "./exposure.js";
+export * from "./exposure-plan-only.js";
+export * from "./exposure-tailscale-serve.js";
