@@ -105,6 +105,15 @@ cut with a short hash when a label would pass 63 characters.
 - One nginx server block per enabled app on `127.0.0.1:<routerPort>`, `server_name` set to its
   host. `LocalEdgeCore_renderExposureHostnamesNginxConfig` renders the whole `nginx.conf`, with
   pid, log and temp paths and the certificate from config, and a default server that answers 421.
+  `listeners` makes the router listen on several loopback ports; each gets the 421 default and
+  every host block, and `clientPort` sets the port written into `X-Forwarded-Host` and
+  `X-Forwarded-Port` for requests on that listener (maps on `$server_port` when they differ).
+- An optional SNI stream router (`stream`): a loopback `ssl_preread` listener in the same nginx that
+  sends matching names (for example `LocalEdgeCore_sniZoneSuffixPattern(rootZone)`) to a router
+  listener and anything else to a default upstream, without terminating TLS. Pointing a tailnet
+  port at it is an owner step the backend never applies.
+- An app may set its own `hostnameTemplate` to sit under another label; list that wildcard in
+  `extraWildcardTemplates` and the certificate and DNS steps cover it too.
 - The provided certificate and key, with a check that their folder is 0700 and outside git.
 - lego DNS-01: the install step (listed, never run), `lego run` for the wildcard with the DNS
   provider's env variable names only (`vercel`: `VERCEL_API_TOKEN`, `VERCEL_TEAM_ID`), and the

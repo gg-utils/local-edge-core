@@ -38,6 +38,42 @@ export type LocalEdgeCore_ExposureApp = {
      * `path` to `127.0.0.1:<localPort><upstreamPath>`; `upstreamPath` defaults to `path`.
      */
     locations?: readonly LocalEdgeCore_ExposureAppLocation[] | undefined;
+    /**
+     * Hostname pattern for this app only, for name-based backends; wins over the settings' pattern.
+     * Same tokens as `hostnameTemplate`. The host must still sit directly under a configured wildcard.
+     */
+    hostnameTemplate?: string | undefined;
+};
+/** One loopback port the router's HTTP server blocks listen on. */
+export type LocalEdgeCore_ExposureRouterListener = {
+    port: number;
+    /** Terminate TLS on this port. Default true. */
+    ssl?: boolean | undefined;
+    /**
+     * Port clients see for requests on this listener, written into `X-Forwarded-Host` and
+     * `X-Forwarded-Port`. Default: `edgePort` for `routerPort`, else the listener's own port.
+     */
+    clientPort?: number | undefined;
+};
+/** One SNI route of the stream router. */
+export type LocalEdgeCore_ExposureStreamRoute = {
+    /** `map` key matched against the SNI name: an exact name or an nginx regex such as `~\.example\.test$`. */
+    serverName: string;
+    /** `host:port` the raw TLS stream goes to. */
+    upstream: string;
+};
+/**
+ * A raw-TCP listener that reads the SNI name without terminating TLS (`ssl_preread`) and passes the
+ * stream on: matching names to the router's own listeners, anything else to a default upstream.
+ */
+export type LocalEdgeCore_ExposureStreamRouter = {
+    /** Loopback port of the stream listener. */
+    port: number;
+    routes: readonly LocalEdgeCore_ExposureStreamRoute[];
+    /** `host:port` for names no route matches. */
+    defaultUpstream: string;
+    /** nginx `proxy_connect_timeout`. Default `5s`. */
+    connectTimeout?: string | undefined;
 };
 /** One extra path route of an app. */
 export type LocalEdgeCore_ExposureAppLocation = {
@@ -75,11 +111,24 @@ export type LocalEdgeCore_ExposureHostnamesConfig = {
     buildHostname?: ((parts: LocalEdgeCore_ExposureHostnameParts) => string) | undefined;
     /** Wildcard that every host must sit directly under. Default `*.{projectMachine}.{rootZone}`. */
     wildcardTemplate?: string | undefined;
+    /**
+     * More wildcards hosts may sit under (same tokens as `wildcardTemplate`), for apps whose
+     * `hostnameTemplate` uses another label. The certificate and DNS steps cover every wildcard.
+     */
+    extraWildcardTemplates?: readonly string[] | undefined;
     /** Loopback router listen host. Must be 127.0.0.1. */
     routerHost: string;
     routerPort: number;
     /** Port clients use, such as a Serve TCP port in front of the router. Defaults to `routerPort`. */
     edgePort?: number | undefined;
+    /**
+     * Every loopback port the HTTP server blocks listen on. Omitted: one TLS listener on
+     * `routerPort`. When given it must include `routerPort`; each listener gets the 421 default
+     * server and every host block.
+     */
+    listeners?: readonly LocalEdgeCore_ExposureRouterListener[] | undefined;
+    /** Optional SNI stream router in front of the listeners. */
+    stream?: LocalEdgeCore_ExposureStreamRouter | undefined;
     /** Certificate and key the router uses; kept in a 0700 folder outside any git checkout. */
     tls: {
         mode: "provided";
@@ -96,6 +145,8 @@ export type LocalEdgeCore_ExposureHostnamesConfig = {
         tempDir: string;
         /** `mime.types` file to include. Omitted: no include (the router only proxies). */
         mimeTypesPath?: string | undefined;
+        /** `worker_connections`. Default 512. */
+        workerConnections?: number | undefined;
     };
     /** Plan-only ACME DNS-01 issuing step. Omit to leave issuing out of the plan. */
     acme?: {

@@ -63,8 +63,11 @@ function LocalEdgeCore_hostnameParts(settings, app) {
     };
 }
 /** Builds the host for one app: config function, then template, then the compact default. */
-export function LocalEdgeCore_buildExposureHostname(settings, app) {
+export function LocalEdgeCore_buildExposureHostname(settings, app, appTemplate) {
     const parts = LocalEdgeCore_hostnameParts(settings, app);
+    if (appTemplate !== undefined) {
+        return LocalEdgeCore_renderHostnameTemplate(appTemplate, parts);
+    }
     if (settings.buildHostname) {
         return settings.buildHostname(parts);
     }
@@ -75,6 +78,21 @@ export function LocalEdgeCore_buildExposureHostnamesWildcard(settings) {
     return (settings.wildcardTemplate ?? LOCAL_EDGE_CORE_HOSTNAMES_DEFAULT_WILDCARD)
         .replace("{projectMachine}", settings.projectMachineLabel)
         .replace("{rootZone}", settings.rootZone);
+}
+/** Fills `{projectMachine}` and `{rootZone}` in a wildcard template. */
+function LocalEdgeCore_fillWildcardTemplate(settings, template) {
+    return template.replace("{projectMachine}", settings.projectMachineLabel).replace("{rootZone}", settings.rootZone);
+}
+/** Every wildcard hosts may sit under: the main one first, then `extraWildcardTemplates`. */
+export function LocalEdgeCore_buildExposureHostnamesWildcards(settings) {
+    return [
+        LocalEdgeCore_buildExposureHostnamesWildcard(settings),
+        ...(settings.extraWildcardTemplates ?? []).map((template) => LocalEdgeCore_fillWildcardTemplate(settings, template)),
+    ];
+}
+/** nginx regex `map` key matching every SNI name under a zone, for example `~\.example\.test$`. */
+export function LocalEdgeCore_sniZoneSuffixPattern(rootZone) {
+    return `~\\.${rootZone.replace(/[.\\^$|?*+()[\]{}]/g, (c) => `\\${c}`)}$`;
 }
 /** Edge URL for a host behind the router port. */
 export function LocalEdgeCore_hostnamesEdgeUrl(host, port) {
@@ -89,7 +107,7 @@ export function LocalEdgeCore_listExposureHostnames(manifest, settings) {
         return {
             appId: app.id,
             name,
-            host: LocalEdgeCore_buildExposureHostname(settings, name),
+            host: LocalEdgeCore_buildExposureHostname(settings, name, app.hostnameTemplate),
             localPort: app.localPort,
             locations: app.locations ?? [],
         };
@@ -147,9 +165,16 @@ export function LocalEdgeCore_validateExposureHostnames(manifest) {
     if (settings.acme && LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES[settings.acme.dnsProvider] === undefined) {
         problems.push(`hostnames.acme.dnsProvider "${settings.acme.dnsProvider}" has no known env names`);
     }
-    const wildcard = LocalEdgeCore_buildExposureHostnamesWildcard(settings);
-    problems.push(...LocalEdgeCore_checkHostnameLabels(wildcard));
-    const wildcardParent = wildcard.replace(/^\*\./, "");
+    const wildcards = LocalEdgeCore_buildExposureHostnamesWildcards(settings);
+    for (const wildcard of wildcards) {
+        problems.push(...LocalEdgeCore_checkHostnameLabels(wildcard));
+        if (!wildcard.startsWith("*.") || !wildcard.endsWith(`.${settings.rootZone}`)) {
+            problems.push(`hostnames wildcard ${wildcard} must be *.<label>.${settings.rootZone}`);
+        }
+    }
+    const wildcardParents = new Set(wildcards.map((wildcard) => wildcard.replace(/^\*\./, "")));
+    problems.push(...LocalEdgeCore_listenerProblems(manifest, settings));
+    problems.push(...LocalEdgeCore_streamProblems(manifest, settings));
     const seen = new Map();
     for (const app of manifest.apps) {
         if (!app.enabled) {
@@ -175,7 +200,7 @@ export function LocalEdgeCore_validateExposureHostnames(manifest) {
         }
         let host;
         try {
-            host = LocalEdgeCore_buildExposureHostname(settings, app.edgeName ?? app.id);
+            host = LocalEdgeCore_buildExposureHostname(settings, app.edgeName ?? app.id, app.hostnameTemplate);
         }
         catch (error) {
             problems.push(`${app.id}: ${error instanceof Error ? error.message : String(error)}`);
@@ -183,8 +208,8 @@ export function LocalEdgeCore_validateExposureHostnames(manifest) {
         }
         problems.push(...LocalEdgeCore_checkHostnameLabels(host).map((p) => `${app.id}: ${p}`));
         const [left, ...restLabels] = host.split(".");
-        if (left === "*" || restLabels.join(".") !== wildcardParent) {
-            problems.push(`${app.id}: ${host} is not directly under ${wildcard}`);
+        if (left === "*" || !wildcardParents.has(restLabels.join("."))) {
+            problems.push(`${app.id}: ${host} is not directly under ${wildcards.join(" or ")}`);
         }
         const other = seen.get(host);
         if (other !== undefined) {
@@ -198,6 +223,164 @@ export function LocalEdgeCore_validateExposureHostnames(manifest) {
 function LocalEdgeCore_clientEdgePort(settings) {
     return settings.edgePort ?? settings.routerPort;
 }
+/** The router's HTTP listeners. Omitted in config: one TLS listener on `routerPort`. */
+export function LocalEdgeCore_routerListeners(settings) {
+    const listeners = settings.listeners ?? [{ port: settings.routerPort }];
+    return listeners.map((listener) => ({
+        port: listener.port,
+        ssl: listener.ssl ?? true,
+        clientPort: listener.clientPort ?? (listener.port === settings.routerPort ? LocalEdgeCore_clientEdgePort(settings) : listener.port),
+    }));
+}
+/** Loopback ports the apps and their extra locations use. */
+function LocalEdgeCore_appPorts(manifest) {
+    return new Set(manifest.apps.flatMap((app) => [app.localPort, ...(app.locations ?? []).map((location) => location.localPort)]));
+}
+/** Checks the listener list: valid, unique, unprotected ports that include `routerPort`. */
+function LocalEdgeCore_listenerProblems(manifest, settings) {
+    if (settings.listeners === undefined) {
+        return [];
+    }
+    const problems = [];
+    const seen = new Set();
+    const appPorts = LocalEdgeCore_appPorts(manifest);
+    for (const listener of settings.listeners) {
+        const label = `hostnames.listeners port ${String(listener.port)}`;
+        if (!LocalEdgeCore_exposureIsPort(listener.port)) {
+            problems.push(`${label} is not a valid TCP port`);
+            continue;
+        }
+        if (manifest.protectedPorts.includes(listener.port)) {
+            problems.push(`${label} is protected`);
+        }
+        if (seen.has(listener.port)) {
+            problems.push(`${label} is listed twice`);
+        }
+        if (appPorts.has(listener.port)) {
+            problems.push(`${label} is also an app port`);
+        }
+        if (listener.clientPort !== undefined && !LocalEdgeCore_exposureIsPort(listener.clientPort)) {
+            problems.push(`${label} has an invalid clientPort ${String(listener.clientPort)}`);
+        }
+        seen.add(listener.port);
+    }
+    if (!seen.has(settings.routerPort)) {
+        problems.push(`hostnames.listeners must include routerPort ${String(settings.routerPort)}`);
+    }
+    return problems;
+}
+/** Parses `host:port`; null when it is not one. */
+function LocalEdgeCore_parseUpstream(value) {
+    const match = /^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\]):(\d{1,5})$/.exec(value);
+    if (!match) {
+        return null;
+    }
+    const port = Number(match[2]);
+    return LocalEdgeCore_exposureIsPort(port) ? { host: match[1] ?? "", port } : null;
+}
+/** Checks the stream router: loopback port of its own, valid routes and upstreams. */
+function LocalEdgeCore_streamProblems(manifest, settings) {
+    const { stream } = settings;
+    if (stream === undefined) {
+        return [];
+    }
+    const problems = [];
+    const label = `hostnames.stream port ${String(stream.port)}`;
+    if (!LocalEdgeCore_exposureIsPort(stream.port)) {
+        problems.push(`${label} is not a valid TCP port`);
+    }
+    else {
+        if (manifest.protectedPorts.includes(stream.port)) {
+            problems.push(`${label} is protected`);
+        }
+        if (LocalEdgeCore_routerListeners(settings).some((listener) => listener.port === stream.port)) {
+            problems.push(`${label} is also an HTTP listener`);
+        }
+        if (LocalEdgeCore_appPorts(manifest).has(stream.port)) {
+            problems.push(`${label} is also an app port`);
+        }
+    }
+    const upstreams = [
+        ...stream.routes.map((route) => ({ what: `route ${route.serverName}`, value: route.upstream })),
+        { what: "default", value: stream.defaultUpstream },
+    ];
+    for (const { what, value } of upstreams) {
+        const upstream = LocalEdgeCore_parseUpstream(value);
+        if (upstream === null) {
+            problems.push(`hostnames.stream ${what} upstream "${value}" must be host:port`);
+        }
+        else if (upstream.host === LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST && upstream.port === stream.port) {
+            problems.push(`hostnames.stream ${what} upstream points back at the stream listener`);
+        }
+    }
+    const keys = new Set();
+    for (const route of stream.routes) {
+        if (!/^[^\s;{}'"#]+$/.test(route.serverName) || route.serverName === "default") {
+            problems.push(`hostnames.stream route "${route.serverName}" is not a usable map key`);
+        }
+        if (keys.has(route.serverName)) {
+            problems.push(`hostnames.stream route "${route.serverName}" is listed twice`);
+        }
+        keys.add(route.serverName);
+    }
+    if (stream.connectTimeout !== undefined && !/^\d+(ms|s|m)?$/.test(stream.connectTimeout)) {
+        problems.push(`hostnames.stream connectTimeout "${stream.connectTimeout}" is not an nginx time`);
+    }
+    return problems;
+}
+/** Renders the `listen` line for one listener. */
+function LocalEdgeCore_renderListen(settings, listener, suffix) {
+    return `listen ${settings.routerHost}:${String(listener.port)}${listener.ssl ? " ssl" : ""}${suffix};`;
+}
+/** `X-Forwarded-Host` value for one client port. */
+function LocalEdgeCore_forwardedHostFor(clientPort) {
+    return clientPort === 443 ? "$host" : `$host:${String(clientPort)}`;
+}
+/**
+ * The `X-Forwarded-Host` and `X-Forwarded-Port` values. With one client port they are literals;
+ * with several, maps on `$server_port` pick the client port of the listener that took the request.
+ */
+function LocalEdgeCore_forwardedValues(listeners) {
+    const clientPorts = [...new Set(listeners.map((listener) => listener.clientPort))];
+    const [only] = clientPorts;
+    if (clientPorts.length === 1 && only !== undefined) {
+        return { host: LocalEdgeCore_forwardedHostFor(only), port: String(only), maps: [] };
+    }
+    const map = (variable, value) => [
+        `  map $server_port ${variable} {`,
+        ...listeners.map((listener) => `    ${String(listener.port)} ${value(listener.clientPort)};`),
+        "  }",
+    ];
+    return {
+        host: "$local_edge_forwarded_host",
+        port: "$local_edge_forwarded_port",
+        maps: [
+            ...map("$local_edge_forwarded_host", LocalEdgeCore_forwardedHostFor),
+            ...map("$local_edge_forwarded_port", (clientPort) => String(clientPort)),
+        ],
+    };
+}
+/** Renders the `stream` block, or nothing when no stream router is configured. */
+function LocalEdgeCore_renderStreamBlock(settings) {
+    const { stream } = settings;
+    if (stream === undefined) {
+        return [];
+    }
+    return [
+        "stream {",
+        "  map $ssl_preread_server_name $local_edge_stream_upstream {",
+        ...stream.routes.map((route) => `    ${route.serverName} ${route.upstream};`),
+        `    default ${stream.defaultUpstream};`,
+        "  }",
+        "  server {",
+        `    listen ${settings.routerHost}:${String(stream.port)};`,
+        "    ssl_preread on;",
+        "    proxy_pass $local_edge_stream_upstream;",
+        `    proxy_connect_timeout ${stream.connectTimeout ?? "5s"};`,
+        "  }",
+        "}",
+    ];
+}
 /** Renders one proxy `location` with the shared headers. */
 function LocalEdgeCore_renderHostLocation(options) {
     return `    location ${options.path} {
@@ -207,31 +390,40 @@ function LocalEdgeCore_renderHostLocation(options) {
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_set_header X-Forwarded-Proto https;
       proxy_set_header X-Forwarded-Host ${options.forwardedHost};
+      proxy_set_header X-Forwarded-Port ${options.forwardedPort};
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Connection $local_edge_connection_upgrade;
       proxy_read_timeout 300s;
     }`;
 }
 /**
- * Renders the server block for one host: TLS on the router port, `server_name` set to the host,
- * `/` to the app's loopback port plus any extra path locations, each proxied with HTTP/1.1, the
- * original Host, `X-Forwarded-Proto https`, `X-Forwarded-Host <host>:<edge port>`, and
- * Upgrade/Connection passed for websockets.
+ * Renders the server block for one host: one `listen` per router listener, `server_name` set to
+ * the host, `/` to the app's loopback port plus any extra path locations, each proxied with
+ * HTTP/1.1, the original Host, `X-Forwarded-Proto https`, `X-Forwarded-Host` and
+ * `X-Forwarded-Port` with the client-facing port, and Upgrade/Connection passed for websockets.
  */
 function LocalEdgeCore_renderHostServerBlock(settings, entry) {
-    const edgePort = LocalEdgeCore_clientEdgePort(settings);
-    const forwardedHost = edgePort === 443 ? "$host" : `$host:${String(edgePort)}`;
+    const listeners = LocalEdgeCore_routerListeners(settings);
+    const { host: forwardedHost, port: forwardedPort } = LocalEdgeCore_forwardedValues(listeners);
     const locations = [
-        LocalEdgeCore_renderHostLocation({ path: "/", localPort: entry.localPort, upstreamPath: "", forwardedHost }),
+        LocalEdgeCore_renderHostLocation({
+            path: "/",
+            localPort: entry.localPort,
+            upstreamPath: "",
+            forwardedHost,
+            forwardedPort,
+        }),
         ...entry.locations.map((location) => LocalEdgeCore_renderHostLocation({
             path: location.path,
             localPort: location.localPort,
             upstreamPath: location.upstreamPath ?? location.path,
             forwardedHost,
+            forwardedPort,
         })),
     ];
+    const listens = listeners.map((listener) => `    ${LocalEdgeCore_renderListen(settings, listener, "")}`);
     return `  server {
-    listen ${settings.routerHost}:${String(settings.routerPort)} ssl;
+${listens.join("\n")}
     http2 on;
     server_name ${entry.host};
 ${locations.join("\n")}
@@ -249,21 +441,23 @@ function LocalEdgeCore_requireValidHostnames(manifest) {
     return manifest.hostnames;
 }
 /**
- * Renders the whole router `nginx.conf`: pid, logs and temp paths from config, the certificate at
- * http level, a default server that answers 421 for unknown names, and one SNI server block per
- * enabled app. Pure and deterministic, so a supervisor can compare it with the file on disk.
+ * Renders the whole router `nginx.conf`: pid, logs and temp paths from config, an optional SNI
+ * stream router, the certificate at http level, a default server on every listener that answers
+ * 421 for unknown names, and one SNI server block per enabled app. Pure and deterministic, so a supervisor can compare it with the file on disk.
  * Throws when the settings or names are invalid.
  */
 export function LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest) {
     const settings = LocalEdgeCore_requireValidHostnames(manifest);
     const { nginx } = settings;
+    const listeners = LocalEdgeCore_routerListeners(settings);
     const temp = (directive, name) => `  ${directive}_temp_path ${path.join(nginx.tempDir, name)};`;
     return [
         "# Generated by the local-edge hostnames backend. Do not edit: changes are overwritten.",
         "worker_processes 1;",
         `pid ${nginx.pidPath};`,
         `error_log ${nginx.errorLogPath} warn;`,
-        "events { worker_connections 256; }",
+        `events { worker_connections ${String(nginx.workerConnections ?? 512)}; }`,
+        ...LocalEdgeCore_renderStreamBlock(settings),
         "http {",
         ...(nginx.mimeTypesPath === undefined ? [] : [`  include ${nginx.mimeTypesPath};`]),
         "  default_type application/octet-stream;",
@@ -278,7 +472,8 @@ export function LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest) {
         `  ssl_certificate_key ${settings.tls.keyPath};`,
         "  ssl_protocols TLSv1.2 TLSv1.3;",
         "  map $http_upgrade $local_edge_connection_upgrade { default upgrade; '' close; }",
-        `  server { listen ${settings.routerHost}:${String(settings.routerPort)} ssl default_server; server_name _; return 421; }`,
+        ...LocalEdgeCore_forwardedValues(listeners).maps,
+        `  server { ${listeners.map((listener) => LocalEdgeCore_renderListen(settings, listener, " default_server")).join(" ")} server_name _; return 421; }`,
         ...LocalEdgeCore_listExposureHostnames(manifest, settings).map((entry) => LocalEdgeCore_renderHostServerBlock(settings, entry)),
         "}",
         "",
@@ -336,7 +531,8 @@ export function LocalEdgeCore_planExposureHostnames(manifest, options = {}) {
     const probe = options.inspectDir ?? LocalEdgeCore_inspectPrivateDir;
     const tailscaleBin = options.tailscaleBin ?? "tailscale";
     const routerTarget = `${settings.routerHost}:${String(settings.routerPort)}`;
-    const wildcard = LocalEdgeCore_buildExposureHostnamesWildcard(settings);
+    const wildcards = LocalEdgeCore_buildExposureHostnamesWildcards(settings);
+    const wildcard = wildcards.join(", ");
     const hosts = new Map(LocalEdgeCore_listExposureHostnames(manifest, settings).map((entry) => [entry.appId, entry]));
     const actions = manifest.apps.map((app) => {
         const target = LocalEdgeCore_exposureTargetUrl(app.localPort);
@@ -396,7 +592,7 @@ export function LocalEdgeCore_planExposureHostnames(manifest, options = {}) {
             argv: LocalEdgeCore_buildLegoDns01Argv({
                 legoBin: options.legoBin,
                 dnsProvider: acme.dnsProvider,
-                domains: [wildcard],
+                domains: wildcards,
                 dataDir: acme.dataDir,
                 email: acme.email,
                 server: acme.server,
@@ -421,11 +617,13 @@ export function LocalEdgeCore_planExposureHostnames(manifest, options = {}) {
     }
     const addresses = settings.addresses ??
         LocalEdgeCore_readTailnetAddresses(options.runner ?? LocalEdgeCore_exposureDefaultCommandRunner, tailscaleBin);
-    const recordName = wildcard.slice(0, wildcard.length - settings.rootZone.length - 1);
-    const records = [
-        `${recordName} A ${addresses.ipv4 ?? "<tailnet IPv4>"}`,
-        ...(addresses.ipv6 ? [`${recordName} AAAA ${addresses.ipv6}`] : []),
-    ];
+    const records = wildcards.flatMap((each) => {
+        const recordName = each.slice(0, each.length - settings.rootZone.length - 1);
+        return [
+            `${recordName} A ${addresses.ipv4 ?? "<tailnet IPv4>"}`,
+            ...(addresses.ipv6 ? [`${recordName} AAAA ${addresses.ipv6}`] : []),
+        ];
+    });
     const dnsLive = settings.dnsLive === true;
     actions.push({
         appId: "router:dns",
@@ -437,6 +635,20 @@ export function LocalEdgeCore_planExposureHostnames(manifest, options = {}) {
             : `the zone owner adds these records under ${settings.rootZone}`,
         detail: records.join("\n"),
     });
+    if (settings.stream !== undefined) {
+        const { stream } = settings;
+        actions.push({
+            appId: "router:stream",
+            kind: "manual",
+            requires: "none",
+            target: `${settings.routerHost}:${String(stream.port)}`,
+            reason: `SNI stream router on ${settings.routerHost}:${String(stream.port)} in the same nginx; pointing a tailnet port at it is an owner step, never applied by this backend`,
+            detail: [
+                ...stream.routes.map((route) => `${route.serverName} -> ${route.upstream}`),
+                `default -> ${stream.defaultUpstream}`,
+            ].join("\n"),
+        });
+    }
     if (settings.tailnetTcp !== false) {
         actions.push({
             appId: "router:tailnet",
@@ -492,12 +704,12 @@ export function LocalEdgeCore_createHostnamesBackend(options = {}) {
         dryRun,
         message: `${name} is plan-only: certificates, DNS and the Serve mapping are owner steps; run the planned steps by hand`,
     });
-    const edgeUrlFor = (manifest, appName) => {
+    const edgeUrlFor = (manifest, appName, appTemplate) => {
         if (!manifest.hostnames) {
             return null;
         }
         try {
-            return LocalEdgeCore_hostnamesEdgeUrl(LocalEdgeCore_buildExposureHostname(manifest.hostnames, appName), LocalEdgeCore_clientEdgePort(manifest.hostnames));
+            return LocalEdgeCore_hostnamesEdgeUrl(LocalEdgeCore_buildExposureHostname(manifest.hostnames, appName, appTemplate), LocalEdgeCore_clientEdgePort(manifest.hostnames));
         }
         catch {
             return null;
@@ -529,7 +741,7 @@ export function LocalEdgeCore_createHostnamesBackend(options = {}) {
             return manifest.apps.map((app) => ({
                 appId: app.id,
                 state: app.enabled ? serve.state : "disabled",
-                edgeUrl: app.enabled ? edgeUrlFor(manifest, app.edgeName ?? app.id) : null,
+                edgeUrl: app.enabled ? edgeUrlFor(manifest, app.edgeName ?? app.id, app.hostnameTemplate) : null,
                 target: LocalEdgeCore_exposureTargetUrl(app.localPort),
                 observedTarget: app.enabled ? serve.observed : null,
                 note: app.enabled ? serve.note : "app is disabled",

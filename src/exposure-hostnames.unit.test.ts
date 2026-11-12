@@ -13,7 +13,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { LocalEdgeCore_ExposureHostnamesConfig, LocalEdgeCore_ExposureManifest } from "./exposure.js";
+import type {
+  LocalEdgeCore_ExposureHostnamesConfig,
+  LocalEdgeCore_ExposureManifest,
+  LocalEdgeCore_ExposureStreamRouter,
+} from "./exposure.js";
 import { LocalEdgeCore_renderExposurePlanText } from "./exposure.js";
 import { LocalEdgeCore_createExposureBackend } from "./exposure-backends.js";
 import {
@@ -21,6 +25,7 @@ import {
   LocalEdgeCore_buildExposureHostname,
   LocalEdgeCore_planExposureHostnames,
   LocalEdgeCore_renderExposureHostnamesNginxConfig,
+  LocalEdgeCore_sniZoneSuffixPattern,
   LocalEdgeCore_validateExposureHostnames,
 } from "./exposure-hostnames.js";
 
@@ -240,4 +245,120 @@ void test("extra path locations render after / with their own upstream paths, an
     const actions = plan(manifest({ apps: [{ id: "preview", enabled: true, localPort: 3100, locations }] }));
     assert.equal(actions[0]?.kind, "refuse", JSON.stringify(locations));
   }
+});
+
+void test("hostnames: router listeners are a list; each gets the 421 default and every host", () => {
+  const listeners = [{ port: 8460 }, { port: 8461, clientPort: 443 }];
+  const text = LocalEdgeCore_renderExposureHostnamesNginxConfig(
+    manifest({ hostnames: { ...settings, edgePort: 8460, listeners } }),
+  );
+  assert.match(
+    text,
+    /server \{ listen 127\.0\.0\.1:8460 ssl default_server; listen 127\.0\.0\.1:8461 ssl default_server; server_name _; return 421; \}/,
+  );
+  const hostBlocks = text.split("\n    server_name ").length - 1;
+  assert.equal(hostBlocks, 2);
+  assert.equal(text.split("    listen 127.0.0.1:8460 ssl;\n    listen 127.0.0.1:8461 ssl;").length - 1, hostBlocks);
+  assert.match(text, /map \$server_port \$local_edge_forwarded_host \{\n {4}8460 \$host:8460;\n {4}8461 \$host;\n {2}\}/);
+  assert.match(text, /map \$server_port \$local_edge_forwarded_port \{\n {4}8460 8460;\n {4}8461 443;\n {2}\}/);
+  assert.match(text, /X-Forwarded-Host \$local_edge_forwarded_host;\n {6}proxy_set_header X-Forwarded-Port \$local_edge_forwarded_port;/);
+
+  const single = LocalEdgeCore_renderExposureHostnamesNginxConfig(
+    manifest({ hostnames: { ...settings, edgePort: 8460, listeners: [{ port: 8460 }] } }),
+  );
+  assert.equal(single, LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest({ hostnames: { ...settings, edgePort: 8460 } })));
+  assert.doesNotMatch(single, /local_edge_forwarded/);
+  assert.match(single, /X-Forwarded-Host \$host:8460;\n {6}proxy_set_header X-Forwarded-Port 8460;/);
+  const plain = LocalEdgeCore_renderExposureHostnamesNginxConfig(
+    manifest({ hostnames: { ...settings, listeners: [{ port: 8460 }, { port: 8461, ssl: false }] } }),
+  );
+  assert.match(plain, /listen 127\.0\.0\.1:8461 default_server;/);
+});
+
+void test("hostnames: listener list guards", () => {
+  const problems = (listeners: LocalEdgeCore_ExposureHostnamesConfig["listeners"]) =>
+    LocalEdgeCore_validateExposureHostnames(manifest({ hostnames: { ...settings, listeners } })).join("\n");
+  assert.match(problems([{ port: 8461 }]), /must include routerPort 8460/);
+  assert.match(problems([{ port: 8460 }, { port: 8460 }]), /listed twice/);
+  assert.match(problems([{ port: 8460 }, { port: 8445 }]), /8445 is protected/);
+  assert.match(problems([{ port: 8460 }, { port: 3210 }]), /also an app port/);
+  assert.match(problems([{ port: 8460 }, { port: 70000 }]), /not a valid TCP port/);
+  assert.match(problems([{ port: 8460, clientPort: 0 }]), /invalid clientPort/);
+  assert.equal(problems([{ port: 8460 }, { port: 8461, clientPort: 443 }]), "");
+});
+
+void test("hostnames: SNI stream router renders before http and is planned, never applied", () => {
+  assert.equal(LocalEdgeCore_sniZoneSuffixPattern("example.test"), "~\\.example\\.test$");
+  const stream: LocalEdgeCore_ExposureStreamRouter = {
+    port: 8462,
+    routes: [{ serverName: LocalEdgeCore_sniZoneSuffixPattern("example.test"), upstream: "127.0.0.1:8461" }],
+    defaultUpstream: "100.64.0.9:8452",
+  };
+  const withStream = manifest({
+    hostnames: { ...settings, listeners: [{ port: 8460 }, { port: 8461, clientPort: 443 }], stream },
+  });
+  const text = LocalEdgeCore_renderExposureHostnamesNginxConfig(withStream);
+  assert.ok(text.indexOf("stream {") < text.indexOf("http {"));
+  assert.ok(
+    text.includes(`stream {
+  map $ssl_preread_server_name $local_edge_stream_upstream {
+    ~\\.example\\.test$ 127.0.0.1:8461;
+    default 100.64.0.9:8452;
+  }
+  server {
+    listen 127.0.0.1:8462;
+    ssl_preread on;
+    proxy_pass $local_edge_stream_upstream;
+    proxy_connect_timeout 5s;
+  }
+}`),
+  );
+  const step = plan(withStream).find((action) => action.appId === "router:stream");
+  assert.equal(step?.kind, "manual");
+  assert.equal(step?.argv, undefined);
+
+  const problems = (patch: Partial<LocalEdgeCore_ExposureStreamRouter>) =>
+    LocalEdgeCore_validateExposureHostnames(
+      manifest({ hostnames: { ...settings, listeners: [{ port: 8460 }, { port: 8461 }], stream: { ...stream, ...patch } } }),
+    ).join("\n");
+  assert.equal(problems({}), "");
+  assert.match(problems({ port: 8461 }), /also an HTTP listener/);
+  assert.match(problems({ port: 8445 }), /is protected/);
+  assert.match(problems({ defaultUpstream: "nowhere" }), /must be host:port/);
+  assert.match(problems({ defaultUpstream: "127.0.0.1:8462" }), /points back at the stream listener/);
+  assert.match(problems({ routes: [{ serverName: "a b", upstream: "127.0.0.1:8461" }] }), /not a usable map key/);
+  assert.match(problems({ connectTimeout: "soon" }), /not an nginx time/);
+});
+
+void test("hostnames: an app may use its own pattern under an extra wildcard", () => {
+  const hostnames = { ...settings, extraWildcardTemplates: ["*.m1.{rootZone}"] };
+  const withDash = manifest({
+    hostnames,
+    apps: [
+      { id: "web", edgeName: "web-rebuild", enabled: true, localPort: 3210 },
+      { id: "dash", enabled: true, localPort: 3081, hostnameTemplate: "{label}.m1.{rootZone}" },
+    ],
+  });
+  assert.deepEqual(LocalEdgeCore_validateExposureHostnames(withDash), []);
+  const text = LocalEdgeCore_renderExposureHostnamesNginxConfig(withDash);
+  assert.match(text, /server_name dash\.m1\.example\.test;/);
+  assert.match(text, /server_name web-rebuild\.proj-m1\.example\.test;/);
+  const actions = plan(withDash);
+  assert.deepEqual(
+    actions.find((action) => action.appId === "dash")?.edgeUrl,
+    "https://dash.m1.example.test:8460",
+  );
+  const acme = actions.find((action) => action.appId === "router:acme")?.argv ?? [];
+  assert.ok(acme.includes("*.proj-m1.example.test") && acme.includes("*.m1.example.test"));
+  assert.match(actions.find((action) => action.appId === "router:dns")?.detail ?? "", /\*\.proj-m1 A 100\.64\.0\.9\n\*\.m1 A 100\.64\.0\.9/);
+
+  const stray = manifest({
+    hostnames: settings,
+    apps: [{ id: "dash", enabled: true, localPort: 3081, hostnameTemplate: "{label}.m1.{rootZone}" }],
+  });
+  assert.match(LocalEdgeCore_validateExposureHostnames(stray).join("\n"), /not directly under \*\.proj-m1\.example\.test/);
+  assert.match(
+    LocalEdgeCore_validateExposureHostnames(manifest({ hostnames: { ...settings, extraWildcardTemplates: ["*.other.zone"] } })).join("\n"),
+    /must be \*\.<label>\.example\.test/,
+  );
 });

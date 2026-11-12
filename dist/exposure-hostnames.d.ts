@@ -40,9 +40,13 @@ export type LocalEdgeCore_PrivateDirProbe = (dir: string) => LocalEdgeCore_Priva
 /** Default probe: `stat` the folder and walk up looking for a `.git` entry. Reads only. */
 export declare const LocalEdgeCore_inspectPrivateDir: LocalEdgeCore_PrivateDirProbe;
 /** Builds the host for one app: config function, then template, then the compact default. */
-export declare function LocalEdgeCore_buildExposureHostname(settings: LocalEdgeCore_ExposureHostnamesConfig, app: string): string;
+export declare function LocalEdgeCore_buildExposureHostname(settings: LocalEdgeCore_ExposureHostnamesConfig, app: string, appTemplate?: string): string;
 /** Builds the wildcard every host must sit directly under, for example `*.proj-m1.example.test`. */
 export declare function LocalEdgeCore_buildExposureHostnamesWildcard(settings: LocalEdgeCore_ExposureHostnamesConfig): string;
+/** Every wildcard hosts may sit under: the main one first, then `extraWildcardTemplates`. */
+export declare function LocalEdgeCore_buildExposureHostnamesWildcards(settings: LocalEdgeCore_ExposureHostnamesConfig): string[];
+/** nginx regex `map` key matching every SNI name under a zone, for example `~\.example\.test$`. */
+export declare function LocalEdgeCore_sniZoneSuffixPattern(rootZone: string): string;
 /** Edge URL for a host behind the router port. */
 export declare function LocalEdgeCore_hostnamesEdgeUrl(host: string, port: number): string;
 /** One enabled app with its host. */
@@ -61,10 +65,18 @@ export declare function LocalEdgeCore_listExposureHostnames(manifest: LocalEdgeC
  * Returns problems; empty means valid.
  */
 export declare function LocalEdgeCore_validateExposureHostnames(manifest: LocalEdgeCore_ExposureManifest): string[];
+/** A listener with its defaults filled in. */
+type LocalEdgeCore_ResolvedRouterListener = {
+    port: number;
+    ssl: boolean;
+    clientPort: number;
+};
+/** The router's HTTP listeners. Omitted in config: one TLS listener on `routerPort`. */
+export declare function LocalEdgeCore_routerListeners(settings: LocalEdgeCore_ExposureHostnamesConfig): LocalEdgeCore_ResolvedRouterListener[];
 /**
- * Renders the whole router `nginx.conf`: pid, logs and temp paths from config, the certificate at
- * http level, a default server that answers 421 for unknown names, and one SNI server block per
- * enabled app. Pure and deterministic, so a supervisor can compare it with the file on disk.
+ * Renders the whole router `nginx.conf`: pid, logs and temp paths from config, an optional SNI
+ * stream router, the certificate at http level, a default server on every listener that answers
+ * 421 for unknown names, and one SNI server block per enabled app. Pure and deterministic, so a supervisor can compare it with the file on disk.
  * Throws when the settings or names are invalid.
  */
 export declare function LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest: LocalEdgeCore_ExposureManifest): string;
@@ -97,3 +109,4 @@ export declare function LocalEdgeCore_observeHostnamesServeTcp(settings: LocalEd
 };
 /** Creates the plan-only `hostnames` backend. `apply()` and `remove()` always refuse. */
 export declare function LocalEdgeCore_createHostnamesBackend(options?: LocalEdgeCore_HostnamesBackendOptions): LocalEdgeCore_ExposureBackend;
+export {};
