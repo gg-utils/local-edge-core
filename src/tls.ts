@@ -188,6 +188,88 @@ function LocalEdgeCore_assertTlsFilesExist(options: {
   }
 }
 
+/**
+ * Builds the exact mkcert argv for a certificate/key pair. Pure, so planners can print the step
+ * without issuing a certificate.
+ *
+ * @param options - Output paths and the names the certificate covers.
+ * @returns `["mkcert", "-cert-file", cert, "-key-file", key, ...hostnames]`; nothing runs.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_buildMkcertArgv({ certPath: "/srv/tls/c.crt", keyPath: "/srv/tls/c.key", hostnames: ["*.example.test"] });
+ * ```
+ */
+export function LocalEdgeCore_buildMkcertArgv(options: {
+  certPath: string;
+  keyPath: string;
+  hostnames: readonly string[];
+}): string[] {
+  return ["mkcert", "-cert-file", options.certPath, "-key-file", options.keyPath, ...options.hostnames];
+}
+
+/** Env variable names the lego DNS providers read. Names only: values are never handled here. */
+export const LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES: Readonly<Record<string, readonly string[]>> = {
+  vercel: ["VERCEL_API_TOKEN", "VERCEL_TEAM_ID"],
+};
+
+/**
+ * Builds a lego ACME DNS-01 `run` argv. lego's `run` is safe to repeat: it renews only when the
+ * certificate is near expiry, so the same command serves issue and renewal. Pure, so planners can
+ * print the step without issuing anything. The DNS provider reads its credentials from env
+ * variables (see `LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES`); none go on the command line.
+ *
+ * @param options - Provider, domains, data folder and optional email, server, key type, deploy hook and binary.
+ * @returns The argv; optional flags appear only when set. Nothing runs.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_buildLegoDns01Argv({ dnsProvider: "vercel", domains: ["*.proj-node1.example.test"], dataDir: "/srv/lego" });
+ * ```
+ */
+export function LocalEdgeCore_buildLegoDns01Argv(options: {
+  dnsProvider: string;
+  domains: readonly string[];
+  dataDir: string;
+  email?: string | undefined;
+  server?: string | undefined;
+  keyType?: string | undefined;
+  deployHook?: string | undefined;
+  legoBin?: string | undefined;
+}): string[] {
+  return [
+    options.legoBin ?? "lego",
+    "run",
+    "--accept-tos",
+    ...(options.email === undefined ? [] : ["--email", options.email]),
+    ...(options.server === undefined ? [] : ["--server", options.server]),
+    "--dns",
+    options.dnsProvider,
+    ...options.domains.flatMap((domain) => ["--domains", domain]),
+    ...(options.keyType === undefined ? [] : ["--key-type", options.keyType]),
+    "--path",
+    options.dataDir,
+    ...(options.deployHook === undefined ? [] : ["--deploy-hook", options.deployHook]),
+  ];
+}
+
+/**
+ * Paths lego writes for a domain: `<dataDir>/certificates/<domain>.crt` and `.key`, with a
+ * leading `*` written as `_` (so `*.a.example` becomes `_.a.example.crt`).
+ *
+ * @param dataDir - lego `--path` folder; trailing slashes are dropped.
+ * @param domain - First domain of the certificate.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_legoCertificatePaths("/srv/lego", "*.a.example"); // { certPath: "/srv/lego/certificates/_.a.example.crt", ... }
+ * ```
+ */
+export function LocalEdgeCore_legoCertificatePaths(
+  dataDir: string,
+  domain: string,
+): { certPath: string; keyPath: string } {
+  const base = `${dataDir.replace(/\/+$/, "")}/certificates/${domain.replace(/^\*/, "_")}`;
+  return { certPath: `${base}.crt`, keyPath: `${base}.key` };
+}
+
 /** Generates or reuses mkcert TLS material for the given hostname list and output paths. */
 async function LocalEdgeCore_generateMkcertCert(options: {
   certPath: string;
@@ -213,13 +295,8 @@ async function LocalEdgeCore_generateMkcertCert(options: {
   });
 
   try {
-    options.dependencies.runCommand("mkcert", [
-      "-cert-file",
-      options.certPath,
-      "-key-file",
-      options.keyPath,
-      ...options.hostnames,
-    ]);
+    const [command, ...args] = LocalEdgeCore_buildMkcertArgv(options);
+    options.dependencies.runCommand(command ?? "mkcert", args);
   } catch (error) {
     throw new Error(
       `${options.messagePrefix} Failed to generate mkcert TLS files: ${LocalEdgeCore_errorMessage(
