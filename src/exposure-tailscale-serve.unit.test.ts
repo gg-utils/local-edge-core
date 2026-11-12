@@ -20,7 +20,7 @@ import {
   LocalEdgeCore_parseTailscaleServeStatus,
 } from "./exposure-tailscale-serve.js";
 
-const HOST = "node-a.example.ts.net";
+const HOST = "node-a.tailnet.example";
 
 /** Serve status shaped like a real node: protected ports, a Funnel TCP port, a service. */
 function serveStatus(extraWeb: Record<string, string> = {}): string {
@@ -50,7 +50,11 @@ function serveStatus(extraWeb: Record<string, string> = {}): string {
 type Call = { command: string; args: readonly string[] };
 
 /** Fake runner that answers status calls and records every other call. */
-function fakeRunner(statusJson: string, options: { failApply?: boolean } = {}) {
+function fakeRunner(initialStatusJson: string, options: { failApply?: boolean } = {}) {
+  let statusJson = initialStatusJson;
+  const setStatus = (next: string) => {
+    statusJson = next;
+  };
   const calls: Call[] = [];
   const runner = (command: string, args: readonly string[]) => {
     calls.push({ command, args });
@@ -63,7 +67,7 @@ function fakeRunner(statusJson: string, options: { failApply?: boolean } = {}) {
     return { status: options.failApply ? 1 : 0, stdout: "", stderr: options.failApply ? "boom" : "" };
   };
   const mutations = () => calls.filter((c) => !(c.args[0] === "status" || c.args[1] === "status"));
-  return { runner, calls, mutations };
+  return { runner, calls, mutations, setStatus };
 }
 
 function manifest(overrides: Partial<LocalEdgeCore_ExposureManifest> = {}): LocalEdgeCore_ExposureManifest {
@@ -89,7 +93,7 @@ void test("parses serve status: web proxy, multi-handler, TCP forward, Funnel; i
 });
 
 void test("parses Self.DNSName without the trailing dot", () => {
-  assert.equal(LocalEdgeCore_parseTailnetSelfDnsName(JSON.stringify({ Self: { DNSName: "a.b.ts.net." } })), "a.b.ts.net");
+  assert.equal(LocalEdgeCore_parseTailnetSelfDnsName(JSON.stringify({ Self: { DNSName: "a.b.tailnet.example." } })), "a.b.tailnet.example");
   assert.equal(LocalEdgeCore_parseTailnetSelfDnsName(JSON.stringify({})), null);
 });
 
@@ -224,7 +228,7 @@ void test("argv guard rejects reset, Funnel, protected ports and unknown shapes"
   assert.notEqual(check(["tailscale", "serve", "reset"]), null);
   assert.notEqual(check(["tailscale", "funnel", "--bg", "8450"]), null);
   assert.notEqual(check(["tailscale", "serve", "--https=443", "off"]), null);
-  assert.notEqual(check(["tailscale", "serve", "--bg", "--https=8450", "http://100.64.0.1:3210"]), null);
+  assert.notEqual(check(["tailscale", "serve", "--bg", "--https=8450", "http://192.0.2.1:3210"]), null);
   assert.notEqual(check(["tailscale", "serve", "--bg", "--https=8450", "--set-path=/x", "http://127.0.0.1:1"]), null);
 });
 
@@ -269,4 +273,97 @@ void test("manifest validation catches duplicates and bad ports", () => {
     ],
   });
   assert.equal(problems.length, 5);
+});
+
+void test("apply re-reads status and refuses an expose plan whose port was taken after planning", () => {
+  const { runner, mutations, setStatus } = fakeRunner(serveStatus());
+  const backend = LocalEdgeCore_createTailscaleServePortsBackend({ runner });
+  const plan = backend.plan(manifest());
+  assert.equal(plan.actions[0]?.kind, "expose");
+  setStatus(serveStatus({ "8451": "http://127.0.0.1:5555" }));
+  const result = backend.apply(plan, { apply: true });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /changed since the plan was built/);
+  assert.equal(mutations().length, 0);
+});
+
+void test("apply re-reads status and refuses a remove plan whose port was retargeted after planning", () => {
+  const owned = manifest({ apps: [{ id: "web", enabled: true, localPort: 3210, edgePort: 8450 }] });
+  const { runner, mutations, setStatus } = fakeRunner(serveStatus({ "8450": "http://127.0.0.1:3210" }));
+  const backend = LocalEdgeCore_createTailscaleServePortsBackend({ runner });
+  const plan = backend.planRemove(owned);
+  assert.equal(plan.actions[0]?.kind, "unexpose");
+  setStatus(serveStatus({ "8450": "http://127.0.0.1:5555" }));
+  assert.equal(backend.apply(plan, { apply: true }).ok, false);
+  setStatus(serveStatus());
+  assert.equal(backend.apply(plan, { apply: true }).ok, false);
+  assert.equal(mutations().length, 0);
+  setStatus(serveStatus({ "8450": "http://127.0.0.1:3210" }));
+  assert.equal(backend.apply(plan, { apply: true }).ok, true);
+  assert.deepEqual(mutations().map((c) => c.args.join(" ")), ["serve --https=8450 off"]);
+});
+
+void test("apply refuses when the status re-read fails, and runs nothing", () => {
+  let statusOk = true;
+  const calls: string[] = [];
+  const runner = (_command: string, args: readonly string[]) => {
+    calls.push(args.join(" "));
+    if (args[0] === "serve" && args[1] === "status") {
+      return statusOk ? { status: 0, stdout: serveStatus(), stderr: "" } : { status: 1, stdout: "", stderr: "down" };
+    }
+    return { status: 0, stdout: "", stderr: "" };
+  };
+  const backend = LocalEdgeCore_createTailscaleServePortsBackend({ runner });
+  const plan = backend.plan(manifest({ hostname: HOST }));
+  statusOk = false;
+  const result = backend.apply(plan, { apply: true });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /down/);
+  assert.deepEqual(calls.filter((c) => !c.includes("status")), []);
+});
+
+void test("apply executes only the validated copy: edited argv, kind, target or applicable are refused", () => {
+  const edits: ((plan: { actions: Record<string, unknown>[]; applicable: boolean }) => void)[] = [
+    (plan) => {
+      const argv = plan.actions[0]?.argv as string[];
+      argv[3] = "--https=8460";
+    },
+    (plan) => {
+      (plan.actions[0] as Record<string, unknown>).argv = ["tailscale", "serve", "--bg", "--https=8460", "http://127.0.0.1:4300"];
+    },
+    (plan) => {
+      (plan.actions[2] as Record<string, unknown>).kind = "expose";
+      (plan.actions[2] as Record<string, unknown>).argv = ["tailscale", "serve", "--bg", "--https=8452", "http://127.0.0.1:3300"];
+    },
+    (plan) => {
+      (plan.actions[0] as Record<string, unknown>).target = "http://127.0.0.1:9999";
+    },
+    (plan) => {
+      plan.applicable = !plan.applicable;
+    },
+  ];
+  for (const edit of edits) {
+    const { runner, mutations } = fakeRunner(serveStatus());
+    const backend = LocalEdgeCore_createTailscaleServePortsBackend({ runner });
+    const plan = backend.plan(manifest());
+    edit(plan as unknown as { actions: Record<string, unknown>[]; applicable: boolean });
+    const result = backend.apply(plan, { apply: true });
+    assert.equal(result.ok, false, `edited plan must be refused: ${result.message}`);
+    assert.match(result.message, /changed after it was built/);
+    assert.equal(mutations().length, 0);
+  }
+});
+
+void test("a refusing plan flipped to applicable never runs its commands", () => {
+  const { runner, mutations } = fakeRunner(serveStatus());
+  const backend = LocalEdgeCore_createTailscaleServePortsBackend({ runner });
+  const plan = backend.plan(
+    manifest({ apps: [{ id: "web", enabled: true, localPort: 3210, edgePort: 8445 }] }),
+  );
+  assert.equal(plan.applicable, false);
+  const edited = plan as unknown as { applicable: boolean; actions: Record<string, unknown>[] };
+  edited.applicable = true;
+  edited.actions[0] = { ...edited.actions[0], kind: "expose", argv: ["tailscale", "serve", "--bg", "--https=8460", "http://127.0.0.1:3210"] };
+  assert.equal(backend.apply(plan, { apply: true }).ok, false);
+  assert.equal(mutations().length, 0);
 });

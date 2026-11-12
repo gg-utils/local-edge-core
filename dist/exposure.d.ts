@@ -114,30 +114,142 @@ export type LocalEdgeCore_ExposureCommandResult = {
 };
 /** Injectable host command runner. Tests pass a fake; nothing here shells out implicitly. */
 export type LocalEdgeCore_ExposureCommandRunner = (command: string, args: readonly string[]) => LocalEdgeCore_ExposureCommandResult;
-/** Default runner: synchronous spawn, no shell, captured output, 15 s timeout. */
+/**
+ * Default runner: synchronous spawn, no shell, captured output, 15 s timeout.
+ *
+ * @param command - Binary to run; looked up on PATH, never passed through a shell.
+ * @param args - Exact argument list.
+ * @returns Exit status (`null` on timeout or spawn failure), stdout, and stderr; a spawn error is
+ *   reported in `stderr` instead of being thrown.
+ *
+ * @example
+ * ```typescript
+ * const result = LocalEdgeCore_exposureDefaultCommandRunner("tailscale", ["serve", "status", "--json"]);
+ * if (result.status !== 0) console.error(result.stderr);
+ * ```
+ */
 export declare const LocalEdgeCore_exposureDefaultCommandRunner: LocalEdgeCore_ExposureCommandRunner;
-/** Loopback HTTP target for an app. */
+/**
+ * Loopback HTTP target for an app.
+ *
+ * @param localPort - Port the app listens on; not range-checked here (see the manifest check).
+ * @returns `http://127.0.0.1:<localPort>`.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_exposureTargetUrl(3000); // "http://127.0.0.1:3000"
+ * ```
+ */
 export declare function LocalEdgeCore_exposureTargetUrl(localPort: number): string;
-/** True for an integer TCP port in 1..65535. */
+/**
+ * True for an integer TCP port in 1..65535.
+ *
+ * @param value - Any value; strings, floats, `0` and out-of-range numbers are `false`.
+ * @returns Whether `value` is a usable TCP port. Never throws.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_exposureIsPort(8450); // true
+ * LocalEdgeCore_exposureIsPort("8450"); // false
+ * ```
+ */
 export declare function LocalEdgeCore_exposureIsPort(value: unknown): value is number;
+/**
+ * True for one lowercase DNS label: 1..63 letters, digits and inner dashes.
+ *
+ * @param value - Candidate label, for example an app `edgeName`.
+ * @returns `true` only for `[a-z0-9]` at both ends with `[a-z0-9-]` between, at most 63 characters.
+ *   Anything else (dots, spaces, `;`, newlines, uppercase, empty) is `false`; it never throws.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_exposureIsDnsLabel("web"); // true
+ * LocalEdgeCore_exposureIsDnsLabel("web;\nreturn 200"); // false
+ * ```
+ */
+export declare function LocalEdgeCore_exposureIsDnsLabel(value: unknown): value is string;
+/**
+ * True for a lowercase dotted DNS name of at most 253 characters whose every label passes
+ * `LocalEdgeCore_exposureIsDnsLabel`.
+ *
+ * @param value - Candidate name, for example a manifest `rootZone` or `hostname`.
+ * @returns `false` for an empty name, a trailing dot, an empty label, any unsafe character, or a
+ *   name longer than 253 characters; it never throws.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_exposureIsDnsName("dev.example.test"); // true
+ * LocalEdgeCore_exposureIsDnsName("dev.example.test;"); // false
+ * ```
+ */
+export declare function LocalEdgeCore_exposureIsDnsName(value: unknown): value is string;
 /**
  * Checks the manifest shape every backend relies on. Returns a list of problems; empty means valid.
  *
  * @remarks
  * Duplicate edge ports, duplicate ids, invalid ports and enabled apps on protected ports are all
  * problems. Backends turn each problem into a `refuse` action instead of throwing, so the operator
- * sees the full plan.
+ * sees the full plan. Names that a backend may render into host config (`edgeName`, `rootZone`,
+ * `hostname`) must be plain DNS labels or names, so no backend can be handed config syntax.
+ *
+ * @param manifest - Manifest to check. It is only read.
+ * @returns One human-readable problem per defect, in manifest order; an empty array means valid.
+ *   It never throws.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_validateExposureManifest({
+ *   protectedPorts: [443],
+ *   apps: [{ id: "web", enabled: true, localPort: 3000, edgePort: 443 }],
+ * }); // [] here; an enabled app on 443 is refused by the backend planner, not by this check
+ * ```
  */
 export declare function LocalEdgeCore_validateExposureManifest(manifest: LocalEdgeCore_ExposureManifest): string[];
-/** Builds a plan object and computes `applicable` from its actions. */
+/**
+ * Builds a plan object and computes `applicable` from its actions.
+ *
+ * @param options - Backend name, resolved edge hostname (or `null`), and the per-app actions.
+ * @returns A new plan whose `applicable` is `true` only when no action is `refuse` or `manual`.
+ *
+ * @example
+ * ```typescript
+ * const plan = LocalEdgeCore_buildExposurePlan({
+ *   backend: "tailscale-serve-ports",
+ *   hostname: "node-a.tailnet.example",
+ *   actions: [{ appId: "web", kind: "noop", requires: "none", reason: "already mapped" }],
+ * });
+ * plan.applicable; // true
+ * ```
+ */
 export declare function LocalEdgeCore_buildExposurePlan(options: {
     backend: string;
     hostname: string | null;
     actions: readonly LocalEdgeCore_ExposureAction[];
 }): LocalEdgeCore_ExposurePlan;
-/** Renders a plan as plain text lines for terminals. */
+/**
+ * Renders a plan as plain text lines for terminals.
+ *
+ * @param plan - Plan to print; only read.
+ * @returns Header lines (backend, hostname, applicable), one line per action, the action's argv
+ *   after `$`, and each `detail` line after `|`, ending with a newline.
+ *
+ * @example
+ * ```typescript
+ * process.stdout.write(LocalEdgeCore_renderExposurePlanText(backend.plan(manifest)));
+ * ```
+ */
 export declare function LocalEdgeCore_renderExposurePlanText(plan: LocalEdgeCore_ExposurePlan): string;
-/** Refusing `apply()` result shared by backends that cannot run the given plan. */
+/**
+ * Refusing `apply()` result shared by backends that cannot run the given plan.
+ *
+ * @param options - Backend name, whether the call was a dry run, and the refusal message.
+ * @returns `{ ok: false, ran: [] }` with the given message: nothing ran.
+ *
+ * @example
+ * ```typescript
+ * return LocalEdgeCore_refusedExposureApply({ backend: "x", dryRun: true, message: "plan-only" });
+ * ```
+ */
 export declare function LocalEdgeCore_refusedExposureApply(options: {
     backend: string;
     dryRun: boolean;

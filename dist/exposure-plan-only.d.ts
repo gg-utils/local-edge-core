@@ -18,9 +18,34 @@ import { type LocalEdgeCore_ExposureBackend } from "./exposure.js";
 export declare const LOCAL_EDGE_CORE_TAILSCALE_SERVICES_BACKEND = "tailscale-services";
 /** Backend name for wildcard DNS plus nginx. */
 export declare const LOCAL_EDGE_CORE_WILDCARD_DNS_NGINX_BACKEND = "wildcard-dns-nginx";
-/** Creates the plan-only `tailscale-services` backend (`svc:<name>` per app). */
+/**
+ * Creates the plan-only `tailscale-services` backend (`svc:<name>` per app).
+ *
+ * @param options - CLI binary used in the suggested commands.
+ * @returns A backend whose plans hold one `manual` action per enabled app needing a tailnet admin,
+ *   and whose `apply`/`remove` always refuse without running anything.
+ *
+ * @example
+ * ```typescript
+ * const plan = LocalEdgeCore_createTailscaleServicesBackend().plan(manifest);
+ * plan.applicable; // false: the admin runs the steps
+ * ```
+ */
 export declare function LocalEdgeCore_createTailscaleServicesBackend(options?: {
     tailscaleBin?: string | undefined;
 }): LocalEdgeCore_ExposureBackend;
-/** Creates the plan-only `wildcard-dns-nginx` backend (`<name>.<rootZone>` per app). */
+/**
+ * Creates the plan-only `wildcard-dns-nginx` backend (`<name>.<rootZone>` per app).
+ *
+ * @returns A backend whose plans render one nginx server block per enabled app as `detail`, only
+ *   after the effective name is a single DNS label and `<name>.<rootZone>` a valid DNS name of at
+ *   most 253 characters (otherwise the app is `refuse` and nothing is rendered); `apply`/`remove`
+ *   always refuse.
+ *
+ * @example
+ * ```typescript
+ * const plan = LocalEdgeCore_createWildcardDnsNginxBackend().plan({ ...manifest, rootZone: "dev.example.test" });
+ * console.log(plan.actions[0]?.detail); // server block for <app>.dev.example.test
+ * ```
+ */
 export declare function LocalEdgeCore_createWildcardDnsNginxBackend(): LocalEdgeCore_ExposureBackend;

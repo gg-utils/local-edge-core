@@ -6,7 +6,11 @@
  * and the guards: protected ports are refused, Funnel ports are refused, foreign mappings are
  * refused unless the app opts in, and turn-off only runs for a port whose single handler points at
  * the app's own loopback target. `apply()` is a dry run unless `{ apply: true }` is passed.
- * Flow: `status --json` -> observed port map -> per-app action -> optional apply -> re-read status.
+ * Every issued plan is recorded privately and frozen; `apply()` runs only that recorded copy,
+ * refuses a plan object that was edited after it was issued, and re-reads status first so a port
+ * that changed since planning is refused instead of overwritten or turned off.
+ * Flow: `status --json` -> observed port map -> per-app action -> frozen record -> optional apply
+ * (re-read status, compare every affected port, then run).
  *
  * @testing Node test runner (tsx): npm run test -- src/exposure-tailscale-serve.unit.test.ts
  *
@@ -36,6 +40,17 @@ function LocalEdgeCore_portFromHostPortKey(key) {
  * @remarks
  * Only top-level `TCP`, `Web` and `AllowFunnel` are read. `Services` belong to other hostnames and
  * are not port mappings of this node. Empty output means nothing is configured.
+ *
+ * @param jsonText - Raw stdout of `tailscale serve status --json`.
+ * @returns Map from edge port to its kind (`web-proxy` only for exactly one `/` proxy handler),
+ *   proxy target and Funnel flag.
+ * @throws When the text is not JSON or not a JSON object.
+ *
+ * @example
+ * ```typescript
+ * const observed = LocalEdgeCore_parseTailscaleServeStatus(result.stdout);
+ * observed.ports.get(8450)?.proxyTarget; // "http://127.0.0.1:3000" when mapped
+ * ```
  */
 export function LocalEdgeCore_parseTailscaleServeStatus(jsonText) {
     const trimmed = jsonText.trim();
@@ -105,7 +120,18 @@ export function LocalEdgeCore_parseTailscaleServeStatus(jsonText) {
     }
     return { ports };
 }
-/** Parses `tailscale status --json` and returns `Self.DNSName` without the trailing dot. */
+/**
+ * Parses `tailscale status --json` and returns `Self.DNSName` without the trailing dot.
+ *
+ * @param jsonText - Raw stdout of `tailscale status --json`.
+ * @returns The node DNS name, or `null` when `Self.DNSName` is missing or empty.
+ * @throws When the text is not JSON.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_parseTailnetSelfDnsName('{"Self":{"DNSName":"node-a.tailnet.example."}}'); // "node-a.tailnet.example"
+ * ```
+ */
 export function LocalEdgeCore_parseTailnetSelfDnsName(jsonText) {
     const parsed = JSON.parse(jsonText);
     if (!LocalEdgeCore_isRecord(parsed) || !LocalEdgeCore_isRecord(parsed.Self)) {
@@ -117,7 +143,17 @@ export function LocalEdgeCore_parseTailnetSelfDnsName(jsonText) {
     }
     return name.replace(/\.$/, "");
 }
-/** Builds the exact serve command that maps `edgePort` to the app's loopback target. */
+/**
+ * Builds the exact serve command that maps `edgePort` to the app's loopback target.
+ *
+ * @param options - CLI binary, edge HTTPS port and loopback port; not validated here.
+ * @returns `[bin, "serve", "--bg", "--https=<edgePort>", "http://127.0.0.1:<localPort>"]`.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_buildTailscaleServeOnArgv({ tailscaleBin: "tailscale", edgePort: 8450, localPort: 3000 });
+ * ```
+ */
 export function LocalEdgeCore_buildTailscaleServeOnArgv(options) {
     return [
         options.tailscaleBin,
@@ -127,13 +163,36 @@ export function LocalEdgeCore_buildTailscaleServeOnArgv(options) {
         LocalEdgeCore_exposureTargetUrl(options.localPort),
     ];
 }
-/** Builds the exact serve command that turns off `edgePort`. */
+/**
+ * Builds the exact serve command that turns off `edgePort`.
+ *
+ * @param options - CLI binary and edge HTTPS port; not validated here.
+ * @returns `[bin, "serve", "--https=<edgePort>", "off"]`.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_buildTailscaleServeOffArgv({ tailscaleBin: "tailscale", edgePort: 8450 });
+ * ```
+ */
 export function LocalEdgeCore_buildTailscaleServeOffArgv(options) {
     return [options.tailscaleBin, "serve", `--https=${String(options.edgePort)}`, "off"];
 }
 /**
  * Checks that an argv is one of the two command shapes this backend emits and that it does not
- * touch a protected port. Used by `apply()` so a hand-edited plan cannot widen what runs.
+ * touch a protected port. `apply()` runs it again on its own frozen copy of each step.
+ *
+ * @param options - Candidate argv, expected CLI binary, and protected ports.
+ * @returns `null` when allowed; otherwise a short reason (wrong binary, Funnel/reset/TCP/service
+ *   flags, missing or protected `--https` port, or any other shape).
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_checkTailscaleServeArgv({
+ *   argv: ["tailscale", "serve", "--https=443", "off"],
+ *   tailscaleBin: "tailscale",
+ *   protectedPorts: [443],
+ * }); // "port 443 is protected"
+ * ```
  */
 export function LocalEdgeCore_checkTailscaleServeArgv(options) {
     const [bin, sub, ...rest] = options.argv;
@@ -158,13 +217,31 @@ export function LocalEdgeCore_checkTailscaleServeArgv(options) {
     const isOff = rest.length === 2 && rest[0] === httpsArg && rest[1] === "off";
     return isOn || isOff ? null : "command shape not allowed";
 }
+function LocalEdgeCore_samePortState(a, b) {
+    if (a === null || b === null) {
+        return a === b;
+    }
+    return a.port === b.port && a.kind === b.kind && a.proxyTarget === b.proxyTarget && a.funnel === b.funnel;
+}
 function LocalEdgeCore_edgeUrl(hostname, port) {
     if (hostname === null) {
         return null;
     }
     return port === 443 ? `https://${hostname}` : `https://${hostname}:${String(port)}`;
 }
-/** Plans one app for `plan()`. Pure: all live state comes in through `observed`. */
+/**
+ * Plans one app for `plan()`. Pure: all live state comes in through `observed`.
+ *
+ * @param options - The app, its manifest, observed serve state, edge hostname and CLI binary.
+ * @returns `skip` (disabled), `refuse` (no edge port, protected, Funnel, non-proxy config, or a
+ *   foreign target without `replaceExistingMapping`), `noop` (already mapped) or `expose` with argv.
+ *
+ * @example
+ * ```typescript
+ * const action = LocalEdgeCore_planTailscaleServeApp({ app, manifest, observed, hostname, tailscaleBin: "tailscale" });
+ * if (action.kind === "expose") console.log(action.argv);
+ * ```
+ */
 export function LocalEdgeCore_planTailscaleServeApp(options) {
     const { app, manifest, observed, hostname } = options;
     const target = LocalEdgeCore_exposureTargetUrl(app.localPort);
@@ -224,7 +301,18 @@ export function LocalEdgeCore_planTailscaleServeApp(options) {
         reason: `port is mapped to a different target ${current.proxyTarget ?? "?"}`,
     };
 }
-/** Plans one app for `planRemove()`. Only turns off a port that points at this app's target. */
+/**
+ * Plans one app for `planRemove()`. Only turns off a port that points at this app's target.
+ *
+ * @param options - Same inputs as `LocalEdgeCore_planTailscaleServeApp`.
+ * @returns `skip`, `noop` (port not mapped), `refuse` (protected, Funnel, or not owned by this
+ *   app) or `unexpose` with the turn-off argv.
+ *
+ * @example
+ * ```typescript
+ * LocalEdgeCore_planTailscaleServeRemoveApp({ app, manifest, observed, hostname, tailscaleBin: "tailscale" }).kind;
+ * ```
+ */
 export function LocalEdgeCore_planTailscaleServeRemoveApp(options) {
     const { app, manifest, observed, hostname } = options;
     const target = LocalEdgeCore_exposureTargetUrl(app.localPort);
@@ -263,13 +351,33 @@ export function LocalEdgeCore_planTailscaleServeRemoveApp(options) {
         reason: "port maps to something else; not owned by this app, left untouched",
     };
 }
-/** Creates the default `tailscale-serve-ports` backend. */
+/**
+ * Creates the default `tailscale-serve-ports` backend.
+ *
+ * @param options - Injectable command runner (default: real spawn) and CLI binary name.
+ * @returns A backend whose `plan`/`planRemove` read `serve status` (and `status` when the manifest
+ *   has no hostname); whose `apply` refuses foreign, edited or non-applicable plans, is a dry run
+ *   without `{ apply: true }`, re-reads status and refuses changed ports before any mutation, and
+ *   stops at the first failing command; and whose `remove` plans then applies a removal.
+ *
+ * @example
+ * ```typescript
+ * const backend = LocalEdgeCore_createTailscaleServePortsBackend();
+ * const plan = backend.plan(manifest);
+ * const result = backend.apply(plan, { apply: true });
+ * if (!result.ok) console.error(result.message);
+ * ```
+ */
 export function LocalEdgeCore_createTailscaleServePortsBackend(options = {}) {
     const runner = options.runner ?? LocalEdgeCore_exposureDefaultCommandRunner;
     const tailscaleBin = options.tailscaleBin ?? "tailscale";
     const name = LOCAL_EDGE_CORE_TAILSCALE_SERVE_PORTS_BACKEND;
-    /** Protected ports of the last planned manifest, re-checked at apply time. */
-    const protectedByPlan = new WeakMap();
+    /**
+     * Private, frozen record of every plan this instance issued. `apply()` executes only these
+     * validated steps, never the caller's plan object, and refuses when the caller's plan no longer
+     * matches the snapshot taken when it was issued.
+     */
+    const issuedPlans = new WeakMap();
     const readObserved = () => {
         const result = runner(tailscaleBin, ["serve", "status", "--json"]);
         if (result.status !== 0) {
@@ -312,7 +420,30 @@ export function LocalEdgeCore_createTailscaleServePortsBackend(options = {}) {
             return planApp({ app, manifest, observed: read.observed, hostname, tailscaleBin });
         });
         const plan = LocalEdgeCore_buildExposurePlan({ backend: name, hostname, actions });
-        protectedByPlan.set(plan, [...manifest.protectedPorts]);
+        const steps = [];
+        if (read !== null && read.ok) {
+            manifest.apps.forEach((app, index) => {
+                const action = actions[index];
+                if (action !== undefined &&
+                    (action.kind === "expose" || action.kind === "unexpose") &&
+                    action.argv !== undefined &&
+                    app.edgePort !== undefined) {
+                    const seen = read.observed.ports.get(app.edgePort);
+                    steps.push(Object.freeze({
+                        appId: action.appId,
+                        edgePort: app.edgePort,
+                        argv: Object.freeze([...action.argv]),
+                        expected: seen === undefined ? null : Object.freeze({ ...seen }),
+                    }));
+                }
+            });
+        }
+        issuedPlans.set(plan, Object.freeze({
+            snapshot: JSON.stringify(plan),
+            applicable: plan.applicable,
+            protectedPorts: Object.freeze([...manifest.protectedPorts]),
+            steps: Object.freeze(steps),
+        }));
         return plan;
     };
     const apply = (plan, applyOptions = {}) => {
@@ -320,11 +451,18 @@ export function LocalEdgeCore_createTailscaleServePortsBackend(options = {}) {
         if (plan.backend !== name) {
             return LocalEdgeCore_refusedExposureApply({ backend: name, dryRun, message: `plan is for backend ${plan.backend}` });
         }
-        const protectedPorts = protectedByPlan.get(plan);
-        if (protectedPorts === undefined) {
+        const issued = issuedPlans.get(plan);
+        if (issued === undefined) {
             return LocalEdgeCore_refusedExposureApply({ backend: name, dryRun, message: "plan was not built by this backend instance" });
         }
-        if (!plan.applicable) {
+        if (JSON.stringify(plan) !== issued.snapshot) {
+            return LocalEdgeCore_refusedExposureApply({
+                backend: name,
+                dryRun,
+                message: "plan was changed after it was built; nothing applied, plan again",
+            });
+        }
+        if (!issued.applicable) {
             const refused = plan.actions.filter((a) => a.kind === "refuse").map((a) => `${a.appId}: ${a.reason}`);
             return LocalEdgeCore_refusedExposureApply({
                 backend: name,
@@ -332,9 +470,9 @@ export function LocalEdgeCore_createTailscaleServePortsBackend(options = {}) {
                 message: `plan has refusals, nothing applied: ${refused.join("; ")}`,
             });
         }
-        const steps = plan.actions.filter((a) => (a.kind === "expose" || a.kind === "unexpose") && a.argv);
+        const { steps, protectedPorts } = issued;
         for (const step of steps) {
-            const problem = LocalEdgeCore_checkTailscaleServeArgv({ argv: step.argv ?? [], tailscaleBin, protectedPorts });
+            const problem = LocalEdgeCore_checkTailscaleServeArgv({ argv: step.argv, tailscaleBin, protectedPorts });
             if (problem !== null) {
                 return LocalEdgeCore_refusedExposureApply({ backend: name, dryRun, message: `${step.appId}: ${problem}` });
             }
@@ -351,11 +489,25 @@ export function LocalEdgeCore_createTailscaleServePortsBackend(options = {}) {
                 message: `dry run, pass --apply to run ${String(steps.length)} command(s)`,
             };
         }
+        const live = readObserved();
+        if (!live.ok) {
+            return LocalEdgeCore_refusedExposureApply({ backend: name, dryRun, message: `nothing applied: ${live.message}` });
+        }
+        for (const step of steps) {
+            const now = live.observed.ports.get(step.edgePort);
+            if (!LocalEdgeCore_samePortState(step.expected, now ?? null)) {
+                return LocalEdgeCore_refusedExposureApply({
+                    backend: name,
+                    dryRun,
+                    message: `${step.appId}: edge port ${String(step.edgePort)} changed since the plan was built; nothing applied, plan again`,
+                });
+            }
+        }
         const ran = [];
         for (const step of steps) {
-            const [command, ...args] = step.argv ?? [];
+            const [command, ...args] = step.argv;
             const result = runner(command ?? tailscaleBin, args);
-            ran.push({ argv: step.argv ?? [], status: result.status, stderr: result.stderr.trim() });
+            ran.push({ argv: step.argv, status: result.status, stderr: result.stderr.trim() });
             if (result.status !== 0) {
                 return { backend: name, dryRun, ok: false, ran, message: `${step.appId}: command failed, stopped` };
             }
