@@ -19,7 +19,16 @@ export declare const LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES: readonly ["tailscal
  * `wildcard-dns-nginx` is kept as an alias of `hostnames`.
  */
 export declare const LOCAL_EDGE_CORE_EXPOSURE_BACKEND_ALIASES: Readonly<Record<string, LocalEdgeCore_ExposureBackendName>>;
-/** Resolves an alias to its backend name; returns the input when it is not an alias. */
+/**
+ * Resolves an alias to its backend name; returns the input when it is not an alias.
+ *
+ * @param name - Name from config.
+ * @returns The registered name for an alias (`ports`, `wildcard-dns-nginx`), otherwise `name` unchanged.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_resolveExposureBackendName("ports"); // "tailscale-serve-ports"
+ * ```
+ */
 export declare function LocalEdgeCore_resolveExposureBackendName(name: string): string;
 /** One of the registered backend names. */
 export type LocalEdgeCore_ExposureBackendName = (typeof LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES)[number];

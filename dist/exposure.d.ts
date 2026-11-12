@@ -95,7 +95,7 @@ export type LocalEdgeCore_ExposureHostnameParts = {
  * `<app>--<realm>.<projectMachineLabel>.<rootZone>` otherwise, so one wildcard covers every host.
  */
 export type LocalEdgeCore_ExposureHostnamesConfig = {
-    /** One DNS label naming the project and machine, for example `proj-m1`. */
+    /** One DNS label naming the project and machine, for example `proj-node1`. */
     projectMachineLabel: string;
     rootZone: string;
     /** Realm (branch or worktree) name; sanitized into a slug. */

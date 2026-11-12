@@ -280,7 +280,7 @@ void test("an enabled app without an edge port is skipped, not refused, so the r
     runner: () => ({ status: 0, stdout: "{}", stderr: "" }),
   });
   const plan = backend.plan({
-    hostname: "node-a.example.ts.net",
+    hostname: "node-a.tailnet.example",
     protectedPorts: [443],
     apps: [
       { id: "named-only", enabled: true, localPort: 3100 },

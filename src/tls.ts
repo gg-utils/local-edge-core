@@ -191,6 +191,13 @@ function LocalEdgeCore_assertTlsFilesExist(options: {
 /**
  * Builds the exact mkcert argv for a certificate/key pair. Pure, so planners can print the step
  * without issuing a certificate.
+ *
+ * @param options - Output paths and the names the certificate covers.
+ * @returns `["mkcert", "-cert-file", cert, "-key-file", key, ...hostnames]`; nothing runs.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_buildMkcertArgv({ certPath: "/srv/tls/c.crt", keyPath: "/srv/tls/c.key", hostnames: ["*.example.test"] });
+ * ```
  */
 export function LocalEdgeCore_buildMkcertArgv(options: {
   certPath: string;
@@ -210,6 +217,13 @@ export const LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES: Readonly<Record<string
  * certificate is near expiry, so the same command serves issue and renewal. Pure, so planners can
  * print the step without issuing anything. The DNS provider reads its credentials from env
  * variables (see `LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES`); none go on the command line.
+ *
+ * @param options - Provider, domains, data folder and optional email, server, key type, deploy hook and binary.
+ * @returns The argv; optional flags appear only when set. Nothing runs.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_buildLegoDns01Argv({ dnsProvider: "vercel", domains: ["*.proj-node1.example.test"], dataDir: "/srv/lego" });
+ * ```
  */
 export function LocalEdgeCore_buildLegoDns01Argv(options: {
   dnsProvider: string;
@@ -240,6 +254,13 @@ export function LocalEdgeCore_buildLegoDns01Argv(options: {
 /**
  * Paths lego writes for a domain: `<dataDir>/certificates/<domain>.crt` and `.key`, with a
  * leading `*` written as `_` (so `*.a.example` becomes `_.a.example.crt`).
+ *
+ * @param dataDir - lego `--path` folder; trailing slashes are dropped.
+ * @param domain - First domain of the certificate.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_legoCertificatePaths("/srv/lego", "*.a.example"); // { certPath: "/srv/lego/certificates/_.a.example.crt", ... }
+ * ```
  */
 export function LocalEdgeCore_legoCertificatePaths(
   dataDir: string,

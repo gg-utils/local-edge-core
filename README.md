@@ -99,8 +99,17 @@ The `hostnames` plan has these steps. One wildcard, `*.<projectMachineLabel>.<ro
 every app and realm, so there is one DNS record and one certificate. The name pattern is a
 template (`{label}`, `{app}`, `{realm}`, `{projectMachine}`, `{rootZone}`) or a function in config;
 every label is checked (lowercase `a-z0-9-`, at most 63 characters, no `--` at positions 3-4)
-and every host must sit directly under the wildcard. Realm slugs come from branch names and are
-cut with a short hash when a label would pass 63 characters.
+and every host must sit directly under the wildcard; whole names may be at most 253 characters.
+Realm slugs come from branch names and are cut with a short hash when a label would pass 63
+characters. A two-character app name works in the main realm, but in other realms `ab--<realm>`
+would put `--` at positions 3-4, so it is refused with `local-edge-core-hostname-short-app`; give
+such an app an `edgeName` of 1 or 3+ characters, or its own `hostnameTemplate`.
+
+Every path written into `nginx.conf` (pid, logs, `include`, temp, certificate and key) goes through
+one check, `LocalEdgeCore_nginxPathProblem`: it must be absolute and contain no whitespace, quotes,
+`;`, `{`, `}`, `#`, `$`, `\` or control characters. Nothing is quoted or escaped, so an unsafe path
+is refused, never rewritten. `edgePort`, the client port the Serve TCP step maps, must be a valid
+port outside `protectedPorts`.
 
 - One nginx server block per enabled app on `127.0.0.1:<routerPort>`, `server_name` set to its
   host. `LocalEdgeCore_renderExposureHostnamesNginxConfig` renders the whole `nginx.conf`, with

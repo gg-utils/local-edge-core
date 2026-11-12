@@ -23,6 +23,7 @@ import { LocalEdgeCore_createExposureBackend } from "./exposure-backends.js";
 import {
   type LocalEdgeCore_PrivateDirProbe,
   LocalEdgeCore_buildExposureHostname,
+  LocalEdgeCore_nginxPathArgument,
   LocalEdgeCore_planExposureHostnames,
   LocalEdgeCore_renderExposureHostnamesNginxConfig,
   LocalEdgeCore_sniZoneSuffixPattern,
@@ -32,7 +33,7 @@ import {
 const privateDirs: LocalEdgeCore_PrivateDirProbe = () => ({ exists: true, mode: 0o700, gitRoot: null });
 
 const settings: LocalEdgeCore_ExposureHostnamesConfig = {
-  projectMachineLabel: "proj-m1",
+  projectMachineLabel: "proj-node1",
   rootZone: "example.test",
   realm: "main",
   routerHost: "127.0.0.1",
@@ -55,7 +56,7 @@ const settings: LocalEdgeCore_ExposureHostnamesConfig = {
     runScript: "/le/bin/cert-run.sh",
     renewal: "daily launch agent",
   },
-  addresses: { ipv4: "100.64.0.9" },
+  addresses: { ipv4: "192.0.2.9" },
 };
 
 function manifest(overrides: Partial<LocalEdgeCore_ExposureManifest> = {}): LocalEdgeCore_ExposureManifest {
@@ -64,7 +65,7 @@ function manifest(overrides: Partial<LocalEdgeCore_ExposureManifest> = {}): Loca
     hostnames: settings,
     apps: [
       { id: "auth", edgeName: "auth-api", enabled: true, localPort: 4300 },
-      { id: "web", edgeName: "web-rebuild", enabled: true, localPort: 3210 },
+      { id: "web", edgeName: "web-app", enabled: true, localPort: 3210 },
       { id: "later", enabled: false, localPort: 3300 },
     ],
     ...overrides,
@@ -76,10 +77,10 @@ function plan(candidate = manifest()) {
 }
 
 void test("names are <app>.<project-machine>.<zone> for main and <app>--<realm> otherwise", () => {
-  assert.equal(LocalEdgeCore_buildExposureHostname(settings, "web-rebuild"), "web-rebuild.proj-m1.example.test");
+  assert.equal(LocalEdgeCore_buildExposureHostname(settings, "web-app"), "web-app.proj-node1.example.test");
   assert.equal(
-    LocalEdgeCore_buildExposureHostname({ ...settings, realm: "Feat/Login" }, "web-rebuild"),
-    "web-rebuild--feat-login.proj-m1.example.test",
+    LocalEdgeCore_buildExposureHostname({ ...settings, realm: "Feat/Login" }, "web-app"),
+    "web-app--feat-login.proj-node1.example.test",
   );
   assert.equal(
     LocalEdgeCore_buildExposureHostname({ ...settings, buildHostname: (p) => `${p.app}.x.${p.rootZone}` }, "a"),
@@ -105,9 +106,9 @@ void test("plans one server block per enabled app, then router, TLS, ACME, DNS a
     ],
   );
   const web = actions[1];
-  assert.equal(web?.edgeUrl, "https://web-rebuild.proj-m1.example.test:8460");
+  assert.equal(web?.edgeUrl, "https://web-app.proj-node1.example.test:8460");
   assert.match(web?.detail ?? "", /listen 127\.0\.0\.1:8460 ssl;/);
-  assert.match(web?.detail ?? "", /server_name web-rebuild\.proj-m1\.example\.test;/);
+  assert.match(web?.detail ?? "", /server_name web-app\.proj-node1\.example\.test;/);
   assert.match(web?.detail ?? "", /proxy_pass http:\/\/127\.0\.0\.1:3210;/);
   assert.match(web?.detail ?? "", /X-Forwarded-Host \$host:8460;/);
   assert.match(web?.detail ?? "", /Connection \$local_edge_connection_upgrade;/);
@@ -147,7 +148,7 @@ void test("ACME steps list install, issue and renewal with env names only", () =
   assert.deepEqual(actions.find((a) => a.appId === "router:acme-install")?.argv, ["brew", "install", "lego"]);
   const acme = actions.find((a) => a.appId === "router:acme");
   assert.deepEqual(acme?.argv, [
-    "lego", "run", "--accept-tos", "--dns", "vercel", "--domains", "*.proj-m1.example.test",
+    "lego", "run", "--accept-tos", "--dns", "vercel", "--domains", "*.proj-node1.example.test",
     "--key-type", "EC256", "--path", "/le/lego", "--deploy-hook", "/le/bin/cert-deploy.sh",
   ]);
   assert.match(acme?.reason ?? "", /VERCEL_API_TOKEN, VERCEL_TEAM_ID/);
@@ -155,14 +156,14 @@ void test("ACME steps list install, issue and renewal with env names only", () =
 });
 
 void test("DNS step lists the wildcard records, or a noop when the owner reports them live", () => {
-  assert.equal(plan().find((a) => a.appId === "router:dns")?.detail, "*.proj-m1 A 100.64.0.9");
+  assert.equal(plan().find((a) => a.appId === "router:dns")?.detail, "*.proj-node1 A 192.0.2.9");
   const live = plan(manifest({ hostnames: { ...settings, dnsLive: true } })).find((a) => a.appId === "router:dns");
   assert.equal(live?.kind, "noop");
   const read = LocalEdgeCore_planExposureHostnames(manifest({ hostnames: { ...settings, addresses: undefined } }), {
     inspectDir: privateDirs,
-    runner: () => ({ status: 0, stdout: JSON.stringify({ Self: { TailscaleIPs: ["100.64.0.7", "fd7a::7"] } }), stderr: "" }),
+    runner: () => ({ status: 0, stdout: JSON.stringify({ Self: { TailscaleIPs: ["192.0.2.7", "2001:db8::7"] } }), stderr: "" }),
   }).find((a) => a.appId === "router:dns");
-  assert.equal(read?.detail, "*.proj-m1 A 100.64.0.7\n*.proj-m1 AAAA fd7a::7");
+  assert.equal(read?.detail, "*.proj-node1 A 192.0.2.7\n*.proj-node1 AAAA 2001:db8::7");
 });
 
 void test("tailnet step is a raw TCP Serve mapping of the router port, and can be left out", () => {
@@ -203,12 +204,12 @@ void test("backend is plan-only: apply and remove refuse even with --apply", () 
   });
   const built = backend.plan(manifest());
   assert.equal(built.applicable, false);
-  assert.equal(built.hostname, "*.proj-m1.example.test");
+  assert.equal(built.hostname, "*.proj-node1.example.test");
   assert.match(LocalEdgeCore_renderExposurePlanText(built), /needs dns-tls-owner/);
   assert.equal(backend.apply(built, { apply: true }).ok, false);
   assert.equal(backend.remove(manifest(), { apply: true }).ok, false);
   assert.deepEqual(backend.status(manifest()).map((r) => r.state), ["unknown", "unknown", "disabled"]);
-  assert.equal(backend.status(manifest())[0]?.edgeUrl, "https://auth-api.proj-m1.example.test:8460");
+  assert.equal(backend.status(manifest())[0]?.edgeUrl, "https://auth-api.proj-node1.example.test:8460");
 });
 
 void test("status reports the Serve TCP mapping in front of the router as exposed, missing or conflict", () => {
@@ -292,7 +293,7 @@ void test("hostnames: SNI stream router renders before http and is planned, neve
   const stream: LocalEdgeCore_ExposureStreamRouter = {
     port: 8462,
     routes: [{ serverName: LocalEdgeCore_sniZoneSuffixPattern("example.test"), upstream: "127.0.0.1:8461" }],
-    defaultUpstream: "100.64.0.9:8452",
+    defaultUpstream: "192.0.2.9:8452",
   };
   const withStream = manifest({
     hostnames: { ...settings, listeners: [{ port: 8460 }, { port: 8461, clientPort: 443 }], stream },
@@ -303,7 +304,7 @@ void test("hostnames: SNI stream router renders before http and is planned, neve
     text.includes(`stream {
   map $ssl_preread_server_name $local_edge_stream_upstream {
     ~\\.example\\.test$ 127.0.0.1:8461;
-    default 100.64.0.9:8452;
+    default 192.0.2.9:8452;
   }
   server {
     listen 127.0.0.1:8462;
@@ -331,34 +332,123 @@ void test("hostnames: SNI stream router renders before http and is planned, neve
 });
 
 void test("hostnames: an app may use its own pattern under an extra wildcard", () => {
-  const hostnames = { ...settings, extraWildcardTemplates: ["*.m1.{rootZone}"] };
+  const hostnames = { ...settings, extraWildcardTemplates: ["*.node1.{rootZone}"] };
   const withDash = manifest({
     hostnames,
     apps: [
-      { id: "web", edgeName: "web-rebuild", enabled: true, localPort: 3210 },
-      { id: "dash", enabled: true, localPort: 3081, hostnameTemplate: "{label}.m1.{rootZone}" },
+      { id: "web", edgeName: "web-app", enabled: true, localPort: 3210 },
+      { id: "dash", enabled: true, localPort: 3081, hostnameTemplate: "{label}.node1.{rootZone}" },
     ],
   });
   assert.deepEqual(LocalEdgeCore_validateExposureHostnames(withDash), []);
   const text = LocalEdgeCore_renderExposureHostnamesNginxConfig(withDash);
-  assert.match(text, /server_name dash\.m1\.example\.test;/);
-  assert.match(text, /server_name web-rebuild\.proj-m1\.example\.test;/);
+  assert.match(text, /server_name dash\.node1\.example\.test;/);
+  assert.match(text, /server_name web-app\.proj-node1\.example\.test;/);
   const actions = plan(withDash);
   assert.deepEqual(
     actions.find((action) => action.appId === "dash")?.edgeUrl,
-    "https://dash.m1.example.test:8460",
+    "https://dash.node1.example.test:8460",
   );
   const acme = actions.find((action) => action.appId === "router:acme")?.argv ?? [];
-  assert.ok(acme.includes("*.proj-m1.example.test") && acme.includes("*.m1.example.test"));
-  assert.match(actions.find((action) => action.appId === "router:dns")?.detail ?? "", /\*\.proj-m1 A 100\.64\.0\.9\n\*\.m1 A 100\.64\.0\.9/);
+  assert.ok(acme.includes("*.proj-node1.example.test") && acme.includes("*.node1.example.test"));
+  assert.match(actions.find((action) => action.appId === "router:dns")?.detail ?? "", /\*\.proj-node1 A 192\.0\.2\.9\n\*\.node1 A 192\.0\.2\.9/);
 
   const stray = manifest({
     hostnames: settings,
-    apps: [{ id: "dash", enabled: true, localPort: 3081, hostnameTemplate: "{label}.m1.{rootZone}" }],
+    apps: [{ id: "dash", enabled: true, localPort: 3081, hostnameTemplate: "{label}.node1.{rootZone}" }],
   });
-  assert.match(LocalEdgeCore_validateExposureHostnames(stray).join("\n"), /not directly under \*\.proj-m1\.example\.test/);
+  assert.match(LocalEdgeCore_validateExposureHostnames(stray).join("\n"), /not directly under \*\.proj-node1\.example\.test/);
   assert.match(
     LocalEdgeCore_validateExposureHostnames(manifest({ hostnames: { ...settings, extraWildcardTemplates: ["*.other.zone"] } })).join("\n"),
     /must be \*\.<label>\.example\.test/,
   );
+});
+
+void test("hostnames: every rendered path field refuses characters nginx reads as syntax", () => {
+  const bad = ["/x;\nuser root", "/x y", "/x\ty", '/x"q', "/x'q", "/x{", "/x}", "/x#c", "/x$v", "/x\\y", "/x\u0000y", "/x\ry", "relative/x"];
+  const fields: [string, (value: string) => LocalEdgeCore_ExposureHostnamesConfig][] = [
+    ["tls.certPath", (v) => ({ ...settings, tls: { ...settings.tls, certPath: v } })],
+    ["tls.keyPath", (v) => ({ ...settings, tls: { ...settings.tls, keyPath: v } })],
+    ["nginx.confPath", (v) => ({ ...settings, nginx: { ...settings.nginx, confPath: v } })],
+    ["nginx.pidPath", (v) => ({ ...settings, nginx: { ...settings.nginx, pidPath: v } })],
+    ["nginx.errorLogPath", (v) => ({ ...settings, nginx: { ...settings.nginx, errorLogPath: v } })],
+    ["nginx.accessLogPath", (v) => ({ ...settings, nginx: { ...settings.nginx, accessLogPath: v } })],
+    ["nginx.tempDir", (v) => ({ ...settings, nginx: { ...settings.nginx, tempDir: v } })],
+    ["nginx.mimeTypesPath", (v) => ({ ...settings, nginx: { ...settings.nginx, mimeTypesPath: v } })],
+    ["acme.dataDir", (v) => ({ ...settings, acme: { ...settings.acme!, dataDir: v } })],
+  ];
+  for (const [field, patch] of fields) {
+    for (const value of bad) {
+      const candidate = manifest({ hostnames: patch(value) });
+      const problems = LocalEdgeCore_validateExposureHostnames(candidate).join("\n");
+      assert.match(problems, new RegExp(`hostnames\\.${field.replace(".", "\\.")}`), `${field} ${JSON.stringify(value)}`);
+      assert.equal(plan(candidate)[0]?.kind, "refuse");
+      assert.throws(() => LocalEdgeCore_renderExposureHostnamesNginxConfig(candidate), /invalid/);
+    }
+  }
+  for (const value of bad) {
+    assert.throws(() => LocalEdgeCore_nginxPathArgument("hostnames.nginx.pidPath", value), /unsafe-path/);
+  }
+  assert.equal(LocalEdgeCore_nginxPathArgument("hostnames.nginx.pidPath", "/srv/edge/nginx.pid"), "/srv/edge/nginx.pid");
+});
+
+void test("hostnames: the client edge port is range-checked and refused when protected", () => {
+  for (const edgePort of [8445, 443, 0, -1, 70000, 1.5, "8470" as unknown as number]) {
+    const candidate = manifest({ hostnames: { ...settings, edgePort } });
+    assert.match(LocalEdgeCore_validateExposureHostnames(candidate).join("\n"), /hostnames\.edgePort/, String(edgePort));
+    const actions = plan(candidate);
+    assert.equal(actions[0]?.kind, "refuse");
+    assert.ok(!actions.some((a) => a.appId === "router:tailnet"));
+  }
+  const ok = plan(manifest({ hostnames: { ...settings, edgePort: 8470 } }));
+  assert.deepEqual(ok.find((a) => a.appId === "router:tailnet")?.argv, ["tailscale", "serve", "--bg", "--tcp=8470", "tcp://127.0.0.1:8460"]);
+});
+
+void test("hostnames: worker_connections must be a positive integer", () => {
+  for (const workerConnections of [0, 1.5, "512; user root" as unknown as number]) {
+    const candidate = manifest({ hostnames: { ...settings, nginx: { ...settings.nginx, workerConnections } } });
+    assert.match(LocalEdgeCore_validateExposureHostnames(candidate).join("\n"), /workerConnections/);
+  }
+});
+
+void test("hostnames: unsafe edge names are refused before any config is rendered", () => {
+  for (const edgeName of ["auth;\n  return 200 x", "a.b", "Auth", "a b"]) {
+    const candidate = manifest({ apps: [{ id: "auth", edgeName, enabled: true, localPort: 4300 }] });
+    const actions = plan(candidate);
+    assert.equal(actions[0]?.kind, "refuse", edgeName);
+    assert.equal(actions[0]?.detail, undefined);
+    assert.throws(() => LocalEdgeCore_renderExposureHostnamesNginxConfig(candidate), /invalid/);
+  }
+});
+
+void test("hostnames: names longer than 253 characters are refused", () => {
+  const zone = (length: number) => `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(length - 63 * 3 - 3)}`;
+  const fits = manifest({
+    hostnames: { ...settings, rootZone: zone(253 - "auth-api.proj-node1.".length) },
+    apps: [{ id: "auth", edgeName: "auth-api", enabled: true, localPort: 4300 }],
+  });
+  assert.deepEqual(LocalEdgeCore_validateExposureHostnames(fits), []);
+  const tooLong = manifest({
+    hostnames: { ...settings, rootZone: zone(254 - "auth-api.proj-node1.".length) },
+    apps: [{ id: "auth", edgeName: "auth-api", enabled: true, localPort: 4300 }],
+  });
+  assert.match(LocalEdgeCore_validateExposureHostnames(tooLong).join("\n"), /longer than 253/);
+});
+
+void test("hostnames: two-character apps work in main and get a clear error in other realms", () => {
+  assert.deepEqual(
+    LocalEdgeCore_validateExposureHostnames(manifest({ apps: [{ id: "ab", enabled: true, localPort: 3000 }] })),
+    [],
+  );
+  const other = manifest({
+    hostnames: { ...settings, realm: "pr-7" },
+    apps: [
+      { id: "a", enabled: true, localPort: 3000 },
+      { id: "ab", enabled: true, localPort: 3001 },
+      { id: "abc", enabled: true, localPort: 3002 },
+    ],
+  });
+  const problems = LocalEdgeCore_validateExposureHostnames(other);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0] ?? "", /^ab: local-edge-core-hostname-short-app: .*edgeName/);
 });

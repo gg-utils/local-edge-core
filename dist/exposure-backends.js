@@ -27,7 +27,16 @@ export const LOCAL_EDGE_CORE_EXPOSURE_BACKEND_ALIASES = {
     ports: LOCAL_EDGE_CORE_TAILSCALE_SERVE_PORTS_BACKEND,
     "wildcard-dns-nginx": LOCAL_EDGE_CORE_HOSTNAMES_BACKEND,
 };
-/** Resolves an alias to its backend name; returns the input when it is not an alias. */
+/**
+ * Resolves an alias to its backend name; returns the input when it is not an alias.
+ *
+ * @param name - Name from config.
+ * @returns The registered name for an alias (`ports`, `wildcard-dns-nginx`), otherwise `name` unchanged.
+ * @example
+ * ```typescript
+ * LocalEdgeCore_resolveExposureBackendName("ports"); // "tailscale-serve-ports"
+ * ```
+ */
 export function LocalEdgeCore_resolveExposureBackendName(name) {
     return LOCAL_EDGE_CORE_EXPOSURE_BACKEND_ALIASES[name] ?? name;
 }
