@@ -12,6 +12,7 @@
  * @see packages/local-edge-core/src/logs.unit.test.ts - Node test module that regression-tests CLI parsing, selector precedence, path layout helpers, and scope file resolution.
  * @documentation reviewed=2026-05-23 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
+import { LocalEdgeCore_messageOption } from "./safe-message.js";
 const LOCAL_EDGE_CORE_LOGS_LABEL = "local-edge:logs";
 const LOCAL_EDGE_CORE_LOGS_POSITIVE_INT = /^[1-9][0-9]*$/;
 const LOCAL_EDGE_CORE_LOGS_NUMERIC = /^[0-9]+(\.[0-9]+)?$/;
@@ -361,7 +362,7 @@ export function LocalEdgeCore_parseLogsCli(options) {
             continue;
         }
         return LocalEdgeCore_logsCliError({
-            message: `Unknown option: ${argument}`,
+            message: `Unknown option: ${LocalEdgeCore_messageOption(argument)}`,
             includeUsage: true,
         });
     }

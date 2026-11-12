@@ -32,8 +32,7 @@ export function LocalEdgeCore_normalizeSlugOrFallback(options) {
 export function LocalEdgeCore_parseRequiredPositiveInt(options) {
     const parsed = Number.parseInt(options.rawValue, 10);
     if (!Number.isFinite(parsed) || parsed < 1) {
-        throw new Error(`[local-edge:config] ${options.envName} must be a positive integer. ` +
-            `Received '${options.rawValue}'.`);
+        throw new Error(`[local-edge:config] ${options.envName} must be a positive integer.`);
     }
     return parsed;
 }
@@ -50,7 +49,7 @@ export function LocalEdgeCore_parseOptionalBooleanFlag(options) {
         return false;
     }
     throw new Error(`[local-edge:config] ${options.envName} must be a boolean flag ` +
-        `(true/false, 1/0, yes/no, on/off). Received '${options.rawValue}'.`);
+        `(true/false, 1/0, yes/no, on/off).`);
 }
 /** Validates a trimmed non-empty host string or IP literal from env/config text. */
 export function LocalEdgeCore_parseRequiredHostOrIp(options) {

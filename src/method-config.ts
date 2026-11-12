@@ -25,6 +25,7 @@ import {
   LocalEdgeCore_buildDockerComposeDownCommand,
   LocalEdgeCore_buildDockerComposeUpDetachedCommand,
 } from "./docker-lifecycle.js";
+import { LocalEdgeCore_messageWord } from "./safe-message.js";
 
 /** Result of resolving an adapter-provided method CSV against a supported-method allowlist. */
 export type LocalEdgeCore_ConfiguredMethodsResult =
@@ -140,7 +141,7 @@ export function LocalEdgeCore_validateRequestedMethod(options: {
   }
 
   throw new Error(
-    `[${options.commandLabel}] Unsupported --method '${options.method}'.`,
+    `[${options.commandLabel}] Unsupported --method '${LocalEdgeCore_messageWord(options.method)}'.`,
   );
 }
 
@@ -186,7 +187,7 @@ export function LocalEdgeCore_resolveConfiguredMethods(options: {
   if (options.singleMethodMode && resolved.length !== 1) {
     return {
       ok: false,
-      message: `${options.envName} must contain exactly one method in single-method mode. Current value='${methodsCsv}'.`,
+      message: `${options.envName} must contain exactly one method in single-method mode.`,
     };
   }
 
@@ -218,7 +219,7 @@ export function LocalEdgeCore_resolvePrimaryMethod(options: {
   ) {
     return {
       ok: false,
-      message: `${options.primaryEnvName}='${configuredPrimary}' is unsupported. Allowed value: ${options.supportedMethods.join(", ")}.`,
+      message: `${options.primaryEnvName} is unsupported. Allowed value: ${options.supportedMethods.join(", ")}.`,
     };
   }
 
@@ -234,7 +235,7 @@ export function LocalEdgeCore_resolvePrimaryMethod(options: {
 
   return {
     ok: false,
-    message: `${options.primaryEnvName}='${configuredPrimary}' is not present in ${options.methodsEnvName}='${methodsCsv}'.`,
+    message: `${options.primaryEnvName} is not present in ${options.methodsEnvName}.`,
   };
 }
 

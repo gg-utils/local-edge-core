@@ -13,6 +13,8 @@
  * @documentation reviewed=2026-05-23 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 
+import { LocalEdgeCore_messageOption } from "./safe-message.js";
+
 /** CLI subcommand token used to route tail, history, and list-runs behavior. */
 export type LocalEdgeCore_LogsCommandName = "tail" | "history" | "list-runs";
 
@@ -550,7 +552,7 @@ export function LocalEdgeCore_parseLogsCli(
     }
 
     return LocalEdgeCore_logsCliError({
-      message: `Unknown option: ${argument}`,
+      message: `Unknown option: ${LocalEdgeCore_messageOption(argument)}`,
       includeUsage: true,
     });
   }

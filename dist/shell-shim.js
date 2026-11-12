@@ -13,6 +13,7 @@
  * @see packages/local-edge-core/src/index.ts - Package public surface re-exporting this shell-shim contract next to other local-edge-core primitives.
  * @documentation reviewed=2026-05-23 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
+import { LocalEdgeCore_messageOption, LocalEdgeCore_messageWord, LocalEdgeCore_messageWords } from "./safe-message.js";
 /** Argv parsing failure for shell-shim command contracts. */
 export class LocalEdgeCoreShellShimError extends Error {
     /** Builds an error tagged for shell-shim parser failures. */
@@ -52,7 +53,7 @@ Commands:
 /** Parses argv tail for `resolve-formatter-state`, accepting no trailing tokens. */
 function LocalEdgeCore_parseShellShimResolveFormatterState(rest) {
     if (rest.length > 0) {
-        throw new LocalEdgeCoreShellShimError(`Unexpected arguments for resolve-formatter-state: ${rest.join(" ")}`);
+        throw new LocalEdgeCoreShellShimError(`Unexpected arguments for resolve-formatter-state: ${LocalEdgeCore_messageWords(rest)}`);
     }
     return { command: "resolve-formatter-state" };
 }
@@ -66,7 +67,7 @@ function LocalEdgeCore_parseShellShimPrintPrelude(rest) {
             index += 1;
             continue;
         }
-        throw new LocalEdgeCoreShellShimError(`Unknown argument for print-prelude: ${token}`);
+        throw new LocalEdgeCoreShellShimError(`Unknown argument for print-prelude: ${LocalEdgeCore_messageOption(token)}`);
     }
     if (logFile.length === 0) {
         throw new LocalEdgeCoreShellShimError("print-prelude requires --log-file <path>.");
@@ -77,7 +78,7 @@ function LocalEdgeCore_parseShellShimPrintPrelude(rest) {
 function LocalEdgeCore_parseShellShimIsTruthy(rest) {
     const value = rest[0] ?? "false";
     if (rest.length > 1) {
-        throw new LocalEdgeCoreShellShimError(`Unexpected arguments for is-truthy: ${rest.slice(1).join(" ")}`);
+        throw new LocalEdgeCoreShellShimError(`Unexpected arguments for is-truthy: ${LocalEdgeCore_messageWords(rest.slice(1))}`);
     }
     return { command: "is-truthy", value };
 }
@@ -91,7 +92,7 @@ function LocalEdgeCore_parseShellShimCollectActiveEnvFiles(rest) {
             index += 1;
             continue;
         }
-        throw new LocalEdgeCoreShellShimError(`Unknown argument for collect-active-env-files: ${token}`);
+        throw new LocalEdgeCoreShellShimError(`Unknown argument for collect-active-env-files: ${LocalEdgeCore_messageOption(token)}`);
     }
     if (projectRoot.length === 0) {
         throw new LocalEdgeCoreShellShimError("collect-active-env-files requires --project-root <path>.");
@@ -118,7 +119,7 @@ function LocalEdgeCore_parseShellShimNormalizeLegacyArtifactPath(rest) {
             index += 1;
             continue;
         }
-        throw new LocalEdgeCoreShellShimError(`Unknown argument for normalize-legacy-artifact-path: ${token}`);
+        throw new LocalEdgeCoreShellShimError(`Unknown argument for normalize-legacy-artifact-path: ${LocalEdgeCore_messageOption(token)}`);
     }
     if (!sawMachineRoot || !sawRaw || machineRoot.length === 0) {
         throw new LocalEdgeCoreShellShimError("normalize-legacy-artifact-path requires --machine-root <path> --raw <path>.");
@@ -135,7 +136,7 @@ function LocalEdgeCore_parseShellShimPrintMethodUrlMatrix(rest) {
             index += 1;
             continue;
         }
-        throw new LocalEdgeCoreShellShimError(`Unknown argument for print-method-url-matrix: ${token}`);
+        throw new LocalEdgeCoreShellShimError(`Unknown argument for print-method-url-matrix: ${LocalEdgeCore_messageOption(token)}`);
     }
     if (method.length === 0) {
         throw new LocalEdgeCoreShellShimError("print-method-url-matrix requires --method <name>.");
@@ -157,11 +158,11 @@ function LocalEdgeCore_parseShellShimResolveLogColorEnabled(rest) {
                 isTtyStdout = false;
             }
             else {
-                throw new LocalEdgeCoreShellShimError(`resolve-log-color-enabled requires --is-tty-stdout true|false (got '${raw}').`);
+                throw new LocalEdgeCoreShellShimError(`resolve-log-color-enabled requires --is-tty-stdout true|false (got '${LocalEdgeCore_messageWord(raw)}').`);
             }
             continue;
         }
-        throw new LocalEdgeCoreShellShimError(`Unknown argument for resolve-log-color-enabled: ${token}`);
+        throw new LocalEdgeCoreShellShimError(`Unknown argument for resolve-log-color-enabled: ${LocalEdgeCore_messageOption(token)}`);
     }
     if (isTtyStdout === undefined) {
         throw new LocalEdgeCoreShellShimError("resolve-log-color-enabled requires --is-tty-stdout <true|false>.");
@@ -196,5 +197,5 @@ export function LocalEdgeCore_parseShellShimArgv(argv) {
     if (command === "resolve-log-color-enabled") {
         return LocalEdgeCore_parseShellShimResolveLogColorEnabled(rest);
     }
-    throw new LocalEdgeCoreShellShimError(`Unknown command: ${command}`);
+    throw new LocalEdgeCoreShellShimError(`Unknown command: ${LocalEdgeCore_messageWord(command)}`);
 }

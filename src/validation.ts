@@ -35,7 +35,7 @@ export function LocalEdgeCore_validatePort(options: {
   if (!/^\d+$/.test(value)) {
     return {
       ok: false,
-      message: `${label} must be numeric. Current value='${value}'.`,
+      message: `${label} must be a whole number from 1 to 65535.`,
     };
   }
 
@@ -43,7 +43,7 @@ export function LocalEdgeCore_validatePort(options: {
   if (parsed < 1 || parsed > 65535) {
     return {
       ok: false,
-      message: `${label} must be in range 1..65535. Current value='${value}'.`,
+      message: `${label} must be a whole number from 1 to 65535.`,
     };
   }
 
@@ -60,7 +60,7 @@ export function LocalEdgeCore_validatePositiveInteger(options: {
   if (!/^\d+$/.test(value)) {
     return {
       ok: false,
-      message: `${label} must be numeric. Current value='${value}'.`,
+      message: `${label} must be a whole number of at least 1.`,
     };
   }
 
@@ -68,7 +68,7 @@ export function LocalEdgeCore_validatePositiveInteger(options: {
   if (parsed < 1) {
     return {
       ok: false,
-      message: `${label} must be >= 1. Current value='${value}'.`,
+      message: `${label} must be a whole number of at least 1.`,
     };
   }
 

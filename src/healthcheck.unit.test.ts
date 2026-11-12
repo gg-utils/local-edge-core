@@ -301,6 +301,6 @@ void test("LocalEdgeCore healthcheck parser rejects invalid flag combinations", 
         defaultSteadyIntervalMs: 15000,
         defaultTimeoutMs: 5000,
       }),
-    /\[local-edge:healthcheck\] --timeout-ms must be a positive integer\. Received '0'\./,
+    /\[local-edge:healthcheck\] --timeout-ms must be a positive integer\./,
   );
 });

@@ -15,6 +15,8 @@
  * @documentation reviewed=2026-05-23 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 
+import { LocalEdgeCore_messageOption, LocalEdgeCore_messageWord } from "./safe-message.js";
+
 /** Concrete local-edge router methods currently supported by the core startup contract. */
 export const LOCAL_EDGE_STARTUP_CLI_SUPPORTED_METHODS = [
   "nginx-docker",
@@ -373,7 +375,7 @@ function LocalEdgeStartupCli_assertCommand(
   ];
   if (!allowed.includes(value as LocalEdge_StartupCli_Command)) {
     throw new LocalEdgeStartupCliParseError(
-      `[local-edge:startup-cli] Unknown command: ${value}`,
+      `[local-edge:startup-cli] Unknown command: ${LocalEdgeCore_messageWord(value)}`,
       { exitCode: 2 },
     );
   }
@@ -395,7 +397,7 @@ function LocalEdgeStartupCli_validateMethodOrAll(
     return raw;
   }
   throw new LocalEdgeStartupCliParseError(
-    `[${label}] Unsupported --method '${raw}'.`,
+    `[${label}] Unsupported --method '${LocalEdgeCore_messageWord(raw)}'.`,
   );
 }
 
@@ -415,7 +417,7 @@ function LocalEdgeStartupCli_validateStartMethod(
     return raw;
   }
   throw new LocalEdgeStartupCliParseError(
-    `[${label}] Unsupported --method '${raw}'.`,
+    `[${label}] Unsupported --method '${LocalEdgeCore_messageWord(raw)}'.`,
   );
 }
 
@@ -528,7 +530,7 @@ export function LocalEdgeStartupCli_parseDoctor(
     }
 
     throw new LocalEdgeStartupCliParseError(
-      `[${label}] Unknown option: ${token}`,
+      `[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`,
     );
   }
 
@@ -586,7 +588,7 @@ export function LocalEdgeStartupCli_parseEnsureRunning(
     }
 
     throw new LocalEdgeStartupCliParseError(
-      `[${label}] Unknown option: ${token}`,
+      `[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`,
     );
   }
 
@@ -630,7 +632,7 @@ export function LocalEdgeStartupCli_parseCanonicalStart(
       continue;
     }
     throw new LocalEdgeStartupCliParseError(
-      `[${label}] Unknown option: ${token}`,
+      `[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`,
     );
   }
 
@@ -703,7 +705,7 @@ function LocalEdgeStartupCli_consumeInitArg(
   }
 
   throw new LocalEdgeStartupCliParseError(
-    `[${label}] Unknown option: ${token}`,
+    `[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`,
   );
 }
 
@@ -775,7 +777,7 @@ export function LocalEdgeStartupCli_parseSetup(
     }
 
     throw new LocalEdgeStartupCliParseError(
-      `[${label}] Unknown option: ${token}`,
+      `[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`,
     );
   }
 
@@ -821,7 +823,7 @@ export function LocalEdgeStartupCli_parseStart(
     }
 
     throw new LocalEdgeStartupCliParseError(
-      `[${label}] Unknown option: ${token}`,
+      `[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`,
     );
   }
 
@@ -860,7 +862,7 @@ export function LocalEdgeStartupCli_parseStop(
     }
 
     throw new LocalEdgeStartupCliParseError(
-      `[${label}] Unknown option: ${token}`,
+      `[${label}] Unknown option: ${LocalEdgeCore_messageOption(token)}`,
     );
   }
 
@@ -989,7 +991,7 @@ function LocalEdgeStartupCli_validateMethod(
     )
   ) {
     throw new LocalEdgeStartupCliParseError(
-      `[${label}] Unsupported --method '${method}'.`,
+      `[${label}] Unsupported --method '${LocalEdgeCore_messageWord(method)}'.`,
     );
   }
 }

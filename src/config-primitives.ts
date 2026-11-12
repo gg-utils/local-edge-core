@@ -13,6 +13,7 @@
  * @documentation reviewed=2026-05-22 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 
+
 /** Normalizes text into a DNS- and path-safe slug for routing identifiers. */
 export function LocalEdgeCore_normalizeSlug(value: string): string {
   return value
@@ -42,8 +43,7 @@ export function LocalEdgeCore_parseRequiredPositiveInt(options: {
   const parsed = Number.parseInt(options.rawValue, 10);
   if (!Number.isFinite(parsed) || parsed < 1) {
     throw new Error(
-      `[local-edge:config] ${options.envName} must be a positive integer. ` +
-        `Received '${options.rawValue}'.`,
+      `[local-edge:config] ${options.envName} must be a positive integer.`,
     );
   }
   return parsed;
@@ -69,7 +69,7 @@ export function LocalEdgeCore_parseOptionalBooleanFlag(options: {
 
   throw new Error(
     `[local-edge:config] ${options.envName} must be a boolean flag ` +
-      `(true/false, 1/0, yes/no, on/off). Received '${options.rawValue}'.`,
+      `(true/false, 1/0, yes/no, on/off).`,
   );
 }
 

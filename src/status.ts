@@ -32,6 +32,7 @@
  */
 
 import { LocalEdgeCore_validateRequestedMethod } from "./method-config.js";
+import { LocalEdgeCore_messageOption, LocalEdgeCore_messageWord } from "./safe-message.js";
 
 /** Parsed CLI flags for generic local-edge status commands. */
 export type LocalEdgeCore_StatusCliOptions = {
@@ -72,7 +73,7 @@ export function LocalEdgeCore_parseStatusCliArgs(options: {
         break;
       default:
         throw new Error(
-          `[${options.commandLabel}] Unknown option: ${argument}`,
+          `[${options.commandLabel}] Unknown option: ${LocalEdgeCore_messageOption(argument)}`,
         );
     }
   }
@@ -258,7 +259,7 @@ function LocalEdgeCore_requireMethodStatus(options: {
   );
   if (!status) {
     throw new Error(
-      `[local-edge-core:status] Missing status for method '${options.method}'.`,
+      `[local-edge-core:status] Missing status for method '${LocalEdgeCore_messageWord(options.method)}'.`,
     );
   }
   return status;

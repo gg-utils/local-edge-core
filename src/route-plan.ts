@@ -27,6 +27,7 @@ import type {
   LocalEdgeCore_Surface,
   LocalEdgeCore_SurfaceAvailability,
 } from "./manifest.js";
+import { LocalEdgeCore_messageWord } from "./safe-message.js";
 
 /** Single route entry resolved from one manifest surface and one realm. */
 export type LocalEdgeCore_RoutePlanSurface = {
@@ -64,8 +65,8 @@ function LocalEdgeCore_assertManifestUpstreamExists(options: {
   );
   if (!exists) {
     throw new Error(
-      `[local-edge-core:route-plan] surface '${options.surface.id}' references ` +
-        `unknown manifest upstream '${options.surface.upstreamId}'.`,
+      `[local-edge-core:route-plan] surface '${LocalEdgeCore_messageWord(options.surface.id)}' references ` +
+        `unknown manifest upstream '${LocalEdgeCore_messageWord(options.surface.upstreamId)}'.`,
     );
   }
 }
@@ -78,8 +79,8 @@ function LocalEdgeCore_resolveRoutePlanUpstream(options: {
   const upstream = options.realmRecord.upstreams[options.surface.upstreamId];
   if (!upstream) {
     throw new Error(
-      `[local-edge-core:route-plan] realm '${options.realmRecord.realmSlug}' missing ` +
-        `upstream '${options.surface.upstreamId}' for surface '${options.surface.id}'.`,
+      `[local-edge-core:route-plan] realm '${LocalEdgeCore_messageWord(options.realmRecord.realmSlug)}' missing ` +
+        `upstream '${LocalEdgeCore_messageWord(options.surface.upstreamId)}' for surface '${LocalEdgeCore_messageWord(options.surface.id)}'.`,
     );
   }
   return upstream;

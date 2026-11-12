@@ -150,12 +150,13 @@ export declare function LocalEdgeCore_listExposureHostnames(manifest: LocalEdgeC
  *
  * @param field - Config field name used in the message, for example `hostnames.nginx.pidPath`.
  * @param value - Path from config.
- * @returns `null` when the path is safe to write unquoted, otherwise the problem.
+ * @returns `null` when the path is safe to write unquoted, otherwise the problem. The problem names
+ *   the field, the rule and the length, and never contains any part of the path.
  *
  * @example
  * ```typescript
  * LocalEdgeCore_nginxPathProblem("hostnames.nginx.pidPath", "/srv/edge/nginx.pid"); // null
- * LocalEdgeCore_nginxPathProblem("hostnames.nginx.pidPath", "/srv/x.pid;\nuser root"); // problem text
+ * LocalEdgeCore_nginxPathProblem("hostnames.nginx.pidPath", "/srv/x.pid;\nuser root"); // problem text, no part of the path
  * ```
  */
 export declare function LocalEdgeCore_nginxPathProblem(field: string, value: string): string | null;

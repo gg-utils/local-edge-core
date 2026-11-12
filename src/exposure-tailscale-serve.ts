@@ -35,6 +35,11 @@ import {
   LocalEdgeCore_refusedExposureApply,
   LocalEdgeCore_validateExposureManifest,
 } from "./exposure.js";
+import {
+  LOCAL_EDGE_CORE_MESSAGE_WORD_SHAPE,
+  LocalEdgeCore_messageAppLabel,
+  LocalEdgeCore_messageQuoted,
+} from "./safe-message.js";
 
 /** Backend name used in config and on the command line. */
 export const LOCAL_EDGE_CORE_TAILSCALE_SERVE_PORTS_BACKEND = "tailscale-serve-ports";
@@ -579,7 +584,7 @@ export function LocalEdgeCore_createTailscaleServePortsBackend(
   ): LocalEdgeCore_ExposureApplyResult => {
     const dryRun = applyOptions.apply !== true;
     if (plan.backend !== name) {
-      return LocalEdgeCore_refusedExposureApply({ backend: name, dryRun, message: `plan is for backend ${plan.backend}` });
+      return LocalEdgeCore_refusedExposureApply({ backend: name, dryRun, message: `plan is for backend ${LocalEdgeCore_messageQuoted(plan.backend, LOCAL_EDGE_CORE_MESSAGE_WORD_SHAPE)}` });
     }
     const issued = issuedPlans.get(plan);
     if (issued === undefined) {
@@ -593,7 +598,7 @@ export function LocalEdgeCore_createTailscaleServePortsBackend(
       });
     }
     if (!issued.applicable) {
-      const refused = plan.actions.filter((a) => a.kind === "refuse").map((a) => `${a.appId}: ${a.reason}`);
+      const refused = plan.actions.filter((a) => a.kind === "refuse").map((a) => `${LocalEdgeCore_messageAppLabel(a.appId)}: ${a.reason}`);
       return LocalEdgeCore_refusedExposureApply({
         backend: name,
         dryRun,
@@ -604,7 +609,7 @@ export function LocalEdgeCore_createTailscaleServePortsBackend(
     for (const step of steps) {
       const problem = LocalEdgeCore_checkTailscaleServeArgv({ argv: step.argv, tailscaleBin, protectedPorts });
       if (problem !== null) {
-        return LocalEdgeCore_refusedExposureApply({ backend: name, dryRun, message: `${step.appId}: ${problem}` });
+        return LocalEdgeCore_refusedExposureApply({ backend: name, dryRun, message: `${LocalEdgeCore_messageAppLabel(step.appId)}: ${problem}` });
       }
     }
     if (steps.length === 0) {
@@ -629,7 +634,7 @@ export function LocalEdgeCore_createTailscaleServePortsBackend(
         return LocalEdgeCore_refusedExposureApply({
           backend: name,
           dryRun,
-          message: `${step.appId}: edge port ${String(step.edgePort)} changed since the plan was built; nothing applied, plan again`,
+          message: `${LocalEdgeCore_messageAppLabel(step.appId)}: edge port ${String(step.edgePort)} changed since the plan was built; nothing applied, plan again`,
         });
       }
     }
@@ -639,7 +644,7 @@ export function LocalEdgeCore_createTailscaleServePortsBackend(
       const result = runner(command ?? tailscaleBin, args);
       ran.push({ argv: step.argv, status: result.status, stderr: result.stderr.trim() });
       if (result.status !== 0) {
-        return { backend: name, dryRun, ok: false, ran, message: `${step.appId}: command failed, stopped` };
+        return { backend: name, dryRun, ok: false, ran, message: `${LocalEdgeCore_messageAppLabel(step.appId)}: command failed, stopped` };
       }
     }
     return { backend: name, dryRun, ok: true, ran, message: `ran ${String(ran.length)} command(s)` };

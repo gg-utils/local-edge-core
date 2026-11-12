@@ -17,6 +17,7 @@
  */
 import { LocalEdgeCore_buildHostnameFromParts } from "./hostname.js";
 import { LocalEdgeCore_validateRequestedMethod } from "./method-config.js";
+import { LocalEdgeCore_messageOption } from "./safe-message.js";
 /** Parses URL-matrix argv without loading env, resolving surfaces, or printing output. */
 export function LocalEdgeCore_parseUrlMatrixCliArgs(options) {
     let requestedMethod = options.defaultMethod;
@@ -40,7 +41,7 @@ export function LocalEdgeCore_parseUrlMatrixCliArgs(options) {
         if (argument === "--help" || argument === "-h") {
             return { method: requestedMethod, help: true };
         }
-        throw new Error(`[${options.commandLabel}] Unknown option: ${argument}`);
+        throw new Error(`[${options.commandLabel}] Unknown option: ${LocalEdgeCore_messageOption(argument)}`);
     }
     if (requestedMethod === "primary" || requestedMethod === "all") {
         return { method: requestedMethod, help: false };

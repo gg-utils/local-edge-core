@@ -29,6 +29,8 @@
 
 import { createHash } from "node:crypto";
 
+import { LocalEdgeCore_messageInputSize } from "./safe-message.js";
+
 /** Explicit parts required to build one local-edge hostname. */
 export type LocalEdgeCore_HostnameParts = {
   surface: string;
@@ -108,7 +110,7 @@ export const LOCAL_EDGE_CORE_COMPACT_REALM_SEPARATOR = "--";
  * @example
  * ```typescript
  * LocalEdgeCore_checkDnsLabel("web"); // null
- * LocalEdgeCore_checkDnsLabel("ab--x"); // "label \"ab--x\" may not have -- at positions 3-4"
+ * LocalEdgeCore_checkDnsLabel("ab--x"); // "label (4 characters) may not have -- at positions 3-4"
  * ```
  */
 export function LocalEdgeCore_checkDnsLabel(label: string): string | null {
@@ -116,16 +118,16 @@ export function LocalEdgeCore_checkDnsLabel(label: string): string | null {
     return "label is empty";
   }
   if (label.length > LOCAL_EDGE_CORE_DNS_LABEL_MAX_LENGTH) {
-    return `label "${label}" is longer than ${String(LOCAL_EDGE_CORE_DNS_LABEL_MAX_LENGTH)} characters`;
+    return `label (${LocalEdgeCore_messageInputSize(label)}) is longer than ${String(LOCAL_EDGE_CORE_DNS_LABEL_MAX_LENGTH)} characters`;
   }
   if (!/^[a-z0-9-]+$/.test(label)) {
-    return `label "${label}" may only use lowercase a-z, 0-9 and -`;
+    return `label (${LocalEdgeCore_messageInputSize(label)}) may only use lowercase a-z, 0-9 and -`;
   }
   if (label.startsWith("-") || label.endsWith("-")) {
-    return `label "${label}" may not start or end with -`;
+    return `label (${LocalEdgeCore_messageInputSize(label)}) may not start or end with -`;
   }
   if (label.slice(2, 4) === "--") {
-    return `label "${label}" may not have -- at positions 3-4`;
+    return `label (${LocalEdgeCore_messageInputSize(label)}) may not have -- at positions 3-4`;
   }
   return null;
 }
@@ -138,7 +140,8 @@ export const LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH = 253;
  *
  * @param hostname - Dotted name without a trailing dot, for example a root zone, wildcard or host.
  * @returns One problem per invalid label, plus one when the whole name is longer than 253
- *   characters; empty means valid. Never throws.
+ *   characters; empty means valid. Never throws. A problem names the length and the position of
+ *   the label, and never repeats any part of the name.
  *
  * @example
  * ```typescript
@@ -150,14 +153,16 @@ export function LocalEdgeCore_checkHostnameLabels(hostname: string): string[] {
   const labels = hostname.split(".");
   const lengthProblems =
     hostname.length > LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH
-      ? [`${hostname.slice(0, 40)}...: name is ${String(hostname.length)} characters, longer than ${String(LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH)}`]
+      ? [`name is ${String(hostname.length)} characters, longer than ${String(LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH)}`]
       : [];
   return [...lengthProblems, ...labels.flatMap((label, index) => {
     if (index === 0 && label === "*") {
       return [];
     }
     const problem = LocalEdgeCore_checkDnsLabel(label);
-    return problem === null ? [] : [`${hostname}: ${problem}`];
+    return problem === null
+      ? []
+      : [`name (${LocalEdgeCore_messageInputSize(hostname)}), part ${String(index + 1)} of ${String(labels.length)}: ${problem}`];
   })];
 }
 
