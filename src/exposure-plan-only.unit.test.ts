@@ -1,5 +1,5 @@
 /**
- * @fileoverview Verifies the plan-only exposure backends and the backend registry: plans are
+ * @fileoverview Verifies the plan-only services backend and the backend registry: plans are
  * printed with what they need, and `apply()` always refuses.
  *
  * @testing Node test runner (tsx): npm run test -- src/exposure-plan-only.unit.test.ts
@@ -13,7 +13,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { LocalEdgeCore_ExposureManifest } from "./exposure.js";
-import { LocalEdgeCore_renderExposurePlanText } from "./exposure.js";
 import {
   LOCAL_EDGE_CORE_DEFAULT_EXPOSURE_BACKEND,
   LocalEdgeCore_createExposureBackend,
@@ -43,20 +42,12 @@ void test("tailscale-services plans svc:<name> steps that need a tailnet admin",
   assert.equal(backend.remove(manifest, { apply: true }).ok, false);
 });
 
-void test("wildcard-dns-nginx plans a server block per app that needs the DNS and TLS owner", () => {
-  const backend = LocalEdgeCore_createExposureBackend("wildcard-dns-nginx");
-  const plan = backend.plan(manifest);
-  assert.equal(plan.actions[0]?.requires, "dns-tls-owner");
-  assert.equal(plan.actions[0]?.edgeUrl, "https://auth.dev.example.internal");
-  assert.match(plan.actions[0]?.detail ?? "", /server_name auth\.dev\.example\.internal;/);
-  assert.match(LocalEdgeCore_renderExposurePlanText(plan), /needs dns-tls-owner/);
-  assert.equal(backend.apply(plan, { apply: true }).ok, false);
-  assert.deepEqual(backend.status(manifest).map((r) => r.state), ["unknown", "disabled"]);
-});
-
 void test("registry defaults to tailscale-serve-ports and rejects unknown names", () => {
   assert.equal(LOCAL_EDGE_CORE_DEFAULT_EXPOSURE_BACKEND, "tailscale-serve-ports");
   assert.equal(LocalEdgeCore_isExposureBackendName("tailscale-serve-ports"), true);
   assert.equal(LocalEdgeCore_isExposureBackendName("serve-funnel"), false);
   assert.throws(() => LocalEdgeCore_createExposureBackend("serve-funnel"), /unknown exposure backend/);
+  assert.equal(LocalEdgeCore_createExposureBackend("ports").name, "tailscale-serve-ports");
+  assert.equal(LocalEdgeCore_createExposureBackend("hostnames").name, "hostnames");
+  assert.equal(LocalEdgeCore_createExposureBackend("wildcard-dns-nginx").name, "hostnames");
 });

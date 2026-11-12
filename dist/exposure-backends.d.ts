@@ -1,8 +1,8 @@
 /**
  * @fileoverview Exposure backend registry: picks a backend by name so the choice is config, not code.
  *
- * `tailscale-serve-ports` is the default because it needs no admin. The other names build
- * plan-only backends whose `apply()` refuses.
+ * `tailscale-serve-ports` (config alias `ports`) is the default because it needs no admin.
+ * `hostnames` and `tailscale-services` are plan-only backends whose `apply()` refuses.
  *
  * @testing Node test runner (tsx): npm run test -- src/exposure-plan-only.unit.test.ts
  *
@@ -12,7 +12,14 @@
  */
 import type { LocalEdgeCore_ExposureBackend, LocalEdgeCore_ExposureCommandRunner } from "./exposure.js";
 /** Backend names known to the registry, default first. */
-export declare const LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES: readonly ["tailscale-serve-ports", "tailscale-services", "wildcard-dns-nginx"];
+export declare const LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES: readonly ["tailscale-serve-ports", "hostnames", "tailscale-services"];
+/**
+ * Short config names. `ports` and `hostnames` are what a config sets as `backend`;
+ * `wildcard-dns-nginx` is kept as an alias of `hostnames`.
+ */
+export declare const LOCAL_EDGE_CORE_EXPOSURE_BACKEND_ALIASES: Readonly<Record<string, LocalEdgeCore_ExposureBackendName>>;
+/** Resolves an alias to its backend name; returns the input when it is not an alias. */
+export declare function LocalEdgeCore_resolveExposureBackendName(name: string): string;
 /** One of the registered backend names. */
 export type LocalEdgeCore_ExposureBackendName = (typeof LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES)[number];
 /** Default backend name. */
@@ -25,5 +32,6 @@ export declare function LocalEdgeCore_createExposureBackend(name: string, option
     tailscaleBin?: string | undefined;
 }): LocalEdgeCore_ExposureBackend;
 export * from "./exposure.js";
+export * from "./exposure-hostnames.js";
 export * from "./exposure-plan-only.js";
 export * from "./exposure-tailscale-serve.js";

@@ -47,7 +47,7 @@ Skip this package when you need a fully wired CLI around a project config; use
 | `@gg-utils/local-edge-core/network` | Listener, loopback, and probe helpers. |
 | `@gg-utils/local-edge-core/healthcheck` | Healthcheck argv, probe, and summary helpers. |
 | `@gg-utils/local-edge-core/cli` | CLI parsing and dry-run output helpers. |
-| `@gg-utils/local-edge-core/exposure` | Switchable exposure backends: `tailscale-serve-ports` (default), plan-only `tailscale-services` and `wildcard-dns-nginx`. |
+| `@gg-utils/local-edge-core/exposure` | Switchable exposure backends: `tailscale-serve-ports` (default, alias `ports`), plan-only `hostnames` and `tailscale-services`. |
 
 ## Quick Start
 
@@ -91,9 +91,19 @@ and `status`.
 
 | Backend | Needs | What it does |
 |---|---|---|
-| `tailscale-serve-ports` (default) | nothing | One tailnet-only HTTPS port per app: `tailscale serve --bg --https=<port> http://127.0.0.1:<localPort>`. |
+| `tailscale-serve-ports` (default, alias `ports`) | nothing | One tailnet-only HTTPS port per app: `tailscale serve --bg --https=<port> http://127.0.0.1:<localPort>`. |
+| `hostnames` (alias `wildcard-dns-nginx`) | DNS and TLS owner, tailnet admin | Plan only. Hosts are `<app>.<realm>.<method>.<machine>.<rootZone>`, routed by SNI on one loopback router port. `apply` refuses. |
 | `tailscale-services` | tailnet admin | Plan only: one `svc:<name>` per app. `apply` refuses. |
-| `wildcard-dns-nginx` | DNS and TLS owner | Plan only: `<name>.<rootZone>` server blocks. `apply` refuses. |
+
+The `hostnames` plan has these steps:
+
+- One nginx server block per app on `127.0.0.1:<routerPort>`, from `nginx.ts`.
+- The dnsmasq rule and the macOS resolver file, from `dns.ts`.
+- An mkcert wildcard per realm (`*.<realm>.<method>.<machine>.<rootZone>`), from `tls.ts`, or a provided certificate.
+- A raw-TCP Serve mapping of the router port: `tailscale serve --tcp=<port> tcp://127.0.0.1:<port>`.
+
+Nothing in the plan is run: the backend starts no services, writes no resolver files and issues
+no certificates. It refuses a protected or non-loopback router port.
 
 Guards in `tailscale-serve-ports`:
 

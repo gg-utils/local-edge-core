@@ -34,6 +34,38 @@ export type LocalEdgeCore_ExposureApp = {
      */
     replaceExistingMapping?: boolean | undefined;
 };
+/** TLS source for the hostname backend: an mkcert wildcard per realm, or a provided pair. */
+export type LocalEdgeCore_ExposureHostnamesTls = {
+    mode: "mkcert";
+    certDir: string;
+} | {
+    mode: "provided";
+    certPath: string;
+    keyPath: string;
+};
+/**
+ * Settings for the hostname backend. Hosts are `<app>.<realm>.<method>.<machine>.<rootZone>`,
+ * routed by SNI on one loopback router port.
+ */
+export type LocalEdgeCore_ExposureHostnamesConfig = {
+    realm: string;
+    method: string;
+    machine: string;
+    rootZone: string;
+    /** Loopback router listen host. Must be 127.0.0.1. */
+    routerHost: string;
+    routerPort: number;
+    tls: LocalEdgeCore_ExposureHostnamesTls;
+    /** Local dnsmasq listener used by the planned resolver file. */
+    dns: {
+        listenAddress: string;
+        port: number;
+        resolverDir: string;
+        logPath: string;
+    };
+    /** Plan a tailnet raw-TCP Serve mapping of the router port. Defaults to true. */
+    tailnetTcp?: boolean | undefined;
+};
 /** Backend-neutral manifest consumed by every exposure backend. */
 export type LocalEdgeCore_ExposureManifest = {
     apps: readonly LocalEdgeCore_ExposureApp[];
@@ -43,6 +75,8 @@ export type LocalEdgeCore_ExposureManifest = {
     hostname?: string | undefined;
     /** Root DNS zone for name-based backends that build `<name>.<zone>` hosts. */
     rootZone?: string | undefined;
+    /** Settings for the hostname backend; required only when that backend is selected. */
+    hostnames?: LocalEdgeCore_ExposureHostnamesConfig | undefined;
 };
 /** What the backend would do (or refuses to do) for one app. */
 export type LocalEdgeCore_ExposureActionKind = "expose" | "unexpose" | "noop" | "skip" | "refuse" | "manual";

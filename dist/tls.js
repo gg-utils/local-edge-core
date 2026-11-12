@@ -98,6 +98,13 @@ function LocalEdgeCore_assertTlsFilesExist(options) {
         throw new Error(options.message);
     }
 }
+/**
+ * Builds the exact mkcert argv for a certificate/key pair. Pure, so planners can print the step
+ * without issuing a certificate.
+ */
+export function LocalEdgeCore_buildMkcertArgv(options) {
+    return ["mkcert", "-cert-file", options.certPath, "-key-file", options.keyPath, ...options.hostnames];
+}
 /** Generates or reuses mkcert TLS material for the given hostname list and output paths. */
 async function LocalEdgeCore_generateMkcertCert(options) {
     const warnings = [];
@@ -112,13 +119,8 @@ async function LocalEdgeCore_generateMkcertCert(options) {
         keyPath: options.keyPath,
     });
     try {
-        options.dependencies.runCommand("mkcert", [
-            "-cert-file",
-            options.certPath,
-            "-key-file",
-            options.keyPath,
-            ...options.hostnames,
-        ]);
+        const [command, ...args] = LocalEdgeCore_buildMkcertArgv(options);
+        options.dependencies.runCommand(command ?? "mkcert", args);
     }
     catch (error) {
         throw new Error(`${options.messagePrefix} Failed to generate mkcert TLS files: ${LocalEdgeCore_errorMessage(error)}. Run 'mkcert -install' once and retry.`);

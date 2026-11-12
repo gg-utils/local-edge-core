@@ -52,6 +52,15 @@ export type LocalEdgeCore_EnsureTlsFilesOptions = {
     messagePrefix: string;
     dependencies?: LocalEdgeCore_TlsDependencies;
 };
+/**
+ * Builds the exact mkcert argv for a certificate/key pair. Pure, so planners can print the step
+ * without issuing a certificate.
+ */
+export declare function LocalEdgeCore_buildMkcertArgv(options: {
+    certPath: string;
+    keyPath: string;
+    hostnames: readonly string[];
+}): string[];
 /** Ensures TLS certificate and key files exist according to the configured TLS mode. */
 export declare function LocalEdgeCore_ensureTlsFiles(options: LocalEdgeCore_EnsureTlsFilesOptions): Promise<string[]>;
 /**
