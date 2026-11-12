@@ -44,7 +44,7 @@ void test("LocalEdgeCore_renderDnsmasqConfig renders method wildcard rules", () 
       addressRules: [
         {
           method: "nginx-docker",
-          developerSlug: "giaco-main",
+          developerSlug: "node-a",
           rootZone: "local.example.test",
           ipAddress: "127.0.0.3",
         },
@@ -55,7 +55,7 @@ void test("LocalEdgeCore_renderDnsmasqConfig renders method wildcard rules", () 
     `port=53535
 listen-address=127.0.0.1
 bind-interfaces
-address=/.nginx-docker.giaco-main.local.example.test/127.0.0.3
+address=/.nginx-docker.node-a.local.example.test/127.0.0.3
 log-queries
 log-facility=/tmp/dnsmasq.log
 address=/.local.example.test/127.0.0.9

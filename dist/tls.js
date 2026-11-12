@@ -339,7 +339,20 @@ export function LocalEdgeCore_detectTailnetSuffix(dependencies = LocalEdgeCore_d
         return null;
     }
 }
-/** Resolves a configured, auto-detected, or default Tailscale MagicDNS suffix. */
+/**
+ * Placeholder MagicDNS suffix returned when none is configured and none can be detected.
+ *
+ * @remarks
+ * Uses the reserved `.example` TLD, so it never names a real tailnet. Callers that need a working
+ * suffix should pass one explicitly or check {@link LocalEdgeCore_detectTailnetSuffix} first.
+ */
+export const LOCAL_EDGE_CORE_FALLBACK_TAILNET_SUFFIX = "tailnet.example";
+/**
+ * Resolves a configured, auto-detected, or placeholder Tailscale MagicDNS suffix.
+ *
+ * @returns The configured value, else the detected suffix, else
+ *   {@link LOCAL_EDGE_CORE_FALLBACK_TAILNET_SUFFIX}.
+ */
 export function LocalEdgeCore_resolveTailnetSuffix(configuredValue, dependencies = LocalEdgeCore_defaultTlsProbeDependencies) {
     const normalized = configuredValue.trim().toLowerCase();
     if (normalized.length > 0 && normalized !== "auto") {
@@ -349,5 +362,5 @@ export function LocalEdgeCore_resolveTailnetSuffix(configuredValue, dependencies
     if (detected !== null) {
         return detected;
     }
-    return "gannet-frog.ts.net";
+    return LOCAL_EDGE_CORE_FALLBACK_TAILNET_SUFFIX;
 }
