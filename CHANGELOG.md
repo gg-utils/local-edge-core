@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `LocalEdgeCore_resolveTailnetSuffix` now falls back to the reserved placeholder `tailnet.example`, exported as `LOCAL_EDGE_CORE_FALLBACK_TAILNET_SUFFIX`, instead of a hard-coded tailnet name. The return type is unchanged; pass a suffix or rely on detection to get a working value.
+- Test fixtures use reserved documentation names only.
+
 ## 0.3.0
 
 ### Added

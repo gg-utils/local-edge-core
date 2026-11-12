@@ -124,5 +124,18 @@ export declare function LocalEdgeCore_mkcertTrustDetected(dependencies?: LocalEd
  * `CurrentTailnet.MagicDNSSuffix` wins over the legacy top-level `MagicDNSSuffix` field.
  */
 export declare function LocalEdgeCore_detectTailnetSuffix(dependencies?: LocalEdgeCore_TlsProbeDependencies): string | null;
-/** Resolves a configured, auto-detected, or default Tailscale MagicDNS suffix. */
+/**
+ * Placeholder MagicDNS suffix returned when none is configured and none can be detected.
+ *
+ * @remarks
+ * Uses the reserved `.example` TLD, so it never names a real tailnet. Callers that need a working
+ * suffix should pass one explicitly or check {@link LocalEdgeCore_detectTailnetSuffix} first.
+ */
+export declare const LOCAL_EDGE_CORE_FALLBACK_TAILNET_SUFFIX = "tailnet.example";
+/**
+ * Resolves a configured, auto-detected, or placeholder Tailscale MagicDNS suffix.
+ *
+ * @returns The configured value, else the detected suffix, else
+ *   {@link LOCAL_EDGE_CORE_FALLBACK_TAILNET_SUFFIX}.
+ */
 export declare function LocalEdgeCore_resolveTailnetSuffix(configuredValue: string, dependencies?: LocalEdgeCore_TlsProbeDependencies): string;
