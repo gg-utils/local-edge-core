@@ -270,3 +270,19 @@ void test("manifest validation catches duplicates and bad ports", () => {
   });
   assert.equal(problems.length, 5);
 });
+
+void test("an enabled app without an edge port is skipped, not refused, so the rest still applies", () => {
+  const backend = LocalEdgeCore_createTailscaleServePortsBackend({
+    runner: () => ({ status: 0, stdout: "{}", stderr: "" }),
+  });
+  const plan = backend.plan({
+    hostname: "node-a.example.ts.net",
+    protectedPorts: [443],
+    apps: [
+      { id: "named-only", enabled: true, localPort: 3100 },
+      { id: "web", enabled: true, localPort: 3000, edgePort: 8450 },
+    ],
+  });
+  assert.deepEqual(plan.actions.map((a) => a.kind), ["skip", "expose"]);
+  assert.equal(plan.applicable, true);
+});
