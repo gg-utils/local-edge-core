@@ -114,6 +114,11 @@ cut with a short hash when a label would pass 63 characters.
   port at it is an owner step the backend never applies.
 - An app may set its own `hostnameTemplate` to sit under another label; list that wildcard in
   `extraWildcardTemplates` and the certificate and DNS steps cover it too.
+- An app may set an exact `host` instead (it must still sit under a configured wildcard), and
+  `proxy` overrides for `/`: `upstreamHost` (the `Host` header sent upstream, for dev servers that
+  refuse unknown hosts), `buffering: false` (`proxy_buffering off`, for streams) and `readTimeout`.
+  Extra `locations` take the same three fields, and an empty `upstreamPath` passes the request
+  URI through unchanged.
 - The provided certificate and key, with a check that their folder is 0700 and outside git.
 - lego DNS-01: the install step (listed, never run), `lego run` for the wildcard with the DNS
   provider's env variable names only (`vercel`: `VERCEL_API_TOKEN`, `VERCEL_TEAM_ID`), and the

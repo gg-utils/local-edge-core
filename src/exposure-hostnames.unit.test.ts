@@ -362,3 +362,52 @@ void test("hostnames: an app may use its own pattern under an extra wildcard", (
     /must be \*\.<label>\.example\.test/,
   );
 });
+
+void test("hostnames: exact hosts and per-location proxy overrides", () => {
+  const hostnames = { ...settings, extraWildcardTemplates: ["*.m1.{rootZone}"] };
+  const withPlay = manifest({
+    hostnames,
+    apps: [
+      { id: "web", edgeName: "web-rebuild", enabled: true, localPort: 3210 },
+      {
+        id: "play",
+        enabled: true,
+        localPort: 5174,
+        host: "play.m1.example.test",
+        proxy: { upstreamHost: "127.0.0.1:5174", buffering: false, readTimeout: "3600s" },
+        locations: [
+          { path: "/api", localPort: 33114, upstreamPath: "", buffering: false, readTimeout: "3600s" },
+          { path: "/plain", localPort: 33114 },
+        ],
+      },
+    ],
+  });
+  assert.deepEqual(LocalEdgeCore_validateExposureHostnames(withPlay), []);
+  const text = LocalEdgeCore_renderExposureHostnamesNginxConfig(withPlay);
+  assert.match(
+    text,
+    /server_name play\.m1\.example\.test;\n {4}location \/ \{\n {6}proxy_pass http:\/\/127\.0\.0\.1:5174;\n {6}proxy_http_version 1\.1;\n {6}proxy_set_header Host 127\.0\.0\.1:5174;/,
+  );
+  assert.match(
+    text,
+    /location \/api \{\n {6}proxy_pass http:\/\/127\.0\.0\.1:33114;\n {6}proxy_http_version 1\.1;\n {6}proxy_set_header Host \$host;[^}]*proxy_set_header Connection \$local_edge_connection_upgrade;\n {6}proxy_buffering off;\n {6}proxy_read_timeout 3600s;/,
+  );
+  assert.match(text, /location \/plain \{\n {6}proxy_pass http:\/\/127\.0\.0\.1:33114\/plain;[^}]*proxy_read_timeout 300s;/);
+  assert.doesNotMatch(text.slice(0, text.indexOf("server_name play")), /proxy_buffering off/);
+  assert.equal(plan(withPlay).find((action) => action.appId === "play")?.edgeUrl, "https://play.m1.example.test:8460");
+
+  const bad = LocalEdgeCore_validateExposureHostnames(
+    manifest({
+      hostnames,
+      apps: [
+        { id: "a", enabled: true, localPort: 3001, host: "a.elsewhere.test" },
+        { id: "b", enabled: true, localPort: 3002, host: "b.m1.example.test", proxy: { upstreamHost: "x; y", readTimeout: "long" } },
+        { id: "c", enabled: true, localPort: 3003, host: "b.m1.example.test" },
+      ],
+    }),
+  ).join("\n");
+  assert.match(bad, /a\.elsewhere\.test is not directly under/);
+  assert.match(bad, /upstreamHost "x; y" must be a host or host:port/);
+  assert.match(bad, /readTimeout "long" is not an nginx time/);
+  assert.match(bad, /c: b\.m1\.example\.test is already used by b/);
+});

@@ -26,7 +26,9 @@ import path from "node:path";
 
 import {
   type LocalEdgeCore_ExposureAction,
+  type LocalEdgeCore_ExposureApp,
   type LocalEdgeCore_ExposureAppLocation,
+  type LocalEdgeCore_ExposureProxyOptions,
   type LocalEdgeCore_ExposureRouterListener,
   type LocalEdgeCore_ExposureBackend,
   type LocalEdgeCore_ExposureCommandRunner,
@@ -162,7 +164,17 @@ export type LocalEdgeCore_ExposureHostnameEntry = {
   host: string;
   localPort: number;
   locations: readonly LocalEdgeCore_ExposureAppLocation[];
+  /** Proxy overrides for `/`. */
+  proxy: LocalEdgeCore_ExposureProxyOptions;
 };
+
+/** The host of one app: its exact `host`, else its own pattern, else the settings' pattern. */
+export function LocalEdgeCore_exposureAppHost(
+  settings: LocalEdgeCore_ExposureHostnamesConfig,
+  app: Pick<LocalEdgeCore_ExposureApp, "id" | "edgeName" | "hostnameTemplate" | "host">,
+): string {
+  return app.host ?? LocalEdgeCore_buildExposureHostname(settings, app.edgeName ?? app.id, app.hostnameTemplate);
+}
 
 /** Lists the enabled apps with their hosts. Throws when a name cannot be built. */
 export function LocalEdgeCore_listExposureHostnames(
@@ -176,9 +188,10 @@ export function LocalEdgeCore_listExposureHostnames(
       return {
         appId: app.id,
         name,
-        host: LocalEdgeCore_buildExposureHostname(settings, name, app.hostnameTemplate),
+        host: LocalEdgeCore_exposureAppHost(settings, app),
         localPort: app.localPort,
         locations: app.locations ?? [],
+        proxy: app.proxy ?? {},
       };
     });
 }
@@ -254,9 +267,14 @@ export function LocalEdgeCore_validateExposureHostnames(manifest: LocalEdgeCore_
     if (app.localPort === settings.routerPort) {
       problems.push(`${app.id}: local port equals the router port`);
     }
+    problems.push(...LocalEdgeCore_proxyOptionProblems(`${app.id}: location /`, app.proxy ?? {}));
     const paths = new Set<string>();
     for (const location of app.locations ?? []) {
+      problems.push(...LocalEdgeCore_proxyOptionProblems(`${app.id}: location ${location.path}`, location));
       for (const [field, value] of [["path", location.path], ["upstreamPath", location.upstreamPath]] as const) {
+        if (field === "upstreamPath" && value === "") {
+          continue;
+        }
         if (value !== undefined && !/^\/[A-Za-z0-9._~\/-]*$/.test(value)) {
           problems.push(`${app.id}: location ${field} "${value}" must start with / and use only URL path characters`);
         }
@@ -271,7 +289,7 @@ export function LocalEdgeCore_validateExposureHostnames(manifest: LocalEdgeCore_
     }
     let host: string;
     try {
-      host = LocalEdgeCore_buildExposureHostname(settings, app.edgeName ?? app.id, app.hostnameTemplate);
+      host = LocalEdgeCore_exposureAppHost(settings, app);
     } catch (error) {
       problems.push(`${app.id}: ${error instanceof Error ? error.message : String(error)}`);
       continue;
@@ -286,6 +304,18 @@ export function LocalEdgeCore_validateExposureHostnames(manifest: LocalEdgeCore_
       problems.push(`${app.id}: ${host} is already used by ${other}`);
     }
     seen.set(host, app.id);
+  }
+  return problems;
+}
+
+/** Checks proxy overrides: a plain `Host` value and an nginx time. */
+function LocalEdgeCore_proxyOptionProblems(label: string, options: LocalEdgeCore_ExposureProxyOptions): string[] {
+  const problems: string[] = [];
+  if (options.upstreamHost !== undefined && !/^[A-Za-z0-9.-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:]+\](:\d{1,5})?$/.test(options.upstreamHost)) {
+    problems.push(`${label} upstreamHost "${options.upstreamHost}" must be a host or host:port`);
+  }
+  if (options.readTimeout !== undefined && !/^\d+(ms|s|m|h)?$/.test(options.readTimeout)) {
+    problems.push(`${label} readTimeout "${options.readTimeout}" is not an nginx time`);
   }
   return problems;
 }
@@ -489,18 +519,20 @@ function LocalEdgeCore_renderHostLocation(options: {
   upstreamPath: string;
   forwardedHost: string;
   forwardedPort: string;
+  proxy: LocalEdgeCore_ExposureProxyOptions;
 }): string {
+  const buffering = options.proxy.buffering === false ? "\n      proxy_buffering off;" : "";
   return `    location ${options.path} {
       proxy_pass http://${LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST}:${String(options.localPort)}${options.upstreamPath};
       proxy_http_version 1.1;
-      proxy_set_header Host $host;
+      proxy_set_header Host ${options.proxy.upstreamHost ?? "$host"};
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_set_header X-Forwarded-Proto https;
       proxy_set_header X-Forwarded-Host ${options.forwardedHost};
       proxy_set_header X-Forwarded-Port ${options.forwardedPort};
       proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection $local_edge_connection_upgrade;
-      proxy_read_timeout 300s;
+      proxy_set_header Connection $local_edge_connection_upgrade;${buffering}
+      proxy_read_timeout ${options.proxy.readTimeout ?? "300s"};
     }`;
 }
 
@@ -523,6 +555,7 @@ function LocalEdgeCore_renderHostServerBlock(
       upstreamPath: "",
       forwardedHost,
       forwardedPort,
+      proxy: entry.proxy,
     }),
     ...entry.locations.map((location) =>
       LocalEdgeCore_renderHostLocation({
@@ -531,6 +564,7 @@ function LocalEdgeCore_renderHostServerBlock(
         upstreamPath: location.upstreamPath ?? location.path,
         forwardedHost,
         forwardedPort,
+        proxy: location,
       }),
     ),
   ];
@@ -858,17 +892,13 @@ export function LocalEdgeCore_createHostnamesBackend(
       dryRun,
       message: `${name} is plan-only: certificates, DNS and the Serve mapping are owner steps; run the planned steps by hand`,
     });
-  const edgeUrlFor = (
-    manifest: LocalEdgeCore_ExposureManifest,
-    appName: string,
-    appTemplate: string | undefined,
-  ): string | null => {
+  const edgeUrlFor = (manifest: LocalEdgeCore_ExposureManifest, app: LocalEdgeCore_ExposureApp): string | null => {
     if (!manifest.hostnames) {
       return null;
     }
     try {
       return LocalEdgeCore_hostnamesEdgeUrl(
-        LocalEdgeCore_buildExposureHostname(manifest.hostnames, appName, appTemplate),
+        LocalEdgeCore_exposureAppHost(manifest.hostnames, app),
         LocalEdgeCore_clientEdgePort(manifest.hostnames),
       );
     } catch {
@@ -902,7 +932,7 @@ export function LocalEdgeCore_createHostnamesBackend(
       return manifest.apps.map((app) => ({
         appId: app.id,
         state: app.enabled ? serve.state : "disabled",
-        edgeUrl: app.enabled ? edgeUrlFor(manifest, app.edgeName ?? app.id, app.hostnameTemplate) : null,
+        edgeUrl: app.enabled ? edgeUrlFor(manifest, app) : null,
         target: LocalEdgeCore_exposureTargetUrl(app.localPort),
         observedTarget: app.enabled ? serve.observed : null,
         note: app.enabled ? serve.note : "app is disabled",

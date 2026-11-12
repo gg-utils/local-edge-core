@@ -20,7 +20,7 @@
  * @see src/hostname.ts - Compact name builder, template renderer and label checks.
  * @documentation reviewed=2026-11-12 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
-import { type LocalEdgeCore_ExposureAction, type LocalEdgeCore_ExposureAppLocation, type LocalEdgeCore_ExposureBackend, type LocalEdgeCore_ExposureCommandRunner, type LocalEdgeCore_ExposureHostnamesConfig, type LocalEdgeCore_ExposureManifest } from "./exposure.js";
+import { type LocalEdgeCore_ExposureAction, type LocalEdgeCore_ExposureApp, type LocalEdgeCore_ExposureAppLocation, type LocalEdgeCore_ExposureProxyOptions, type LocalEdgeCore_ExposureBackend, type LocalEdgeCore_ExposureCommandRunner, type LocalEdgeCore_ExposureHostnamesConfig, type LocalEdgeCore_ExposureManifest } from "./exposure.js";
 /** Backend name for SNI-routed hostnames. */
 export declare const LOCAL_EDGE_CORE_HOSTNAMES_BACKEND = "hostnames";
 /** Default hostname template. `{label}` is `<app>` or `<app>--<realm>`. */
@@ -56,7 +56,11 @@ export type LocalEdgeCore_ExposureHostnameEntry = {
     host: string;
     localPort: number;
     locations: readonly LocalEdgeCore_ExposureAppLocation[];
+    /** Proxy overrides for `/`. */
+    proxy: LocalEdgeCore_ExposureProxyOptions;
 };
+/** The host of one app: its exact `host`, else its own pattern, else the settings' pattern. */
+export declare function LocalEdgeCore_exposureAppHost(settings: LocalEdgeCore_ExposureHostnamesConfig, app: Pick<LocalEdgeCore_ExposureApp, "id" | "edgeName" | "hostnameTemplate" | "host">): string;
 /** Lists the enabled apps with their hosts. Throws when a name cannot be built. */
 export declare function LocalEdgeCore_listExposureHostnames(manifest: LocalEdgeCore_ExposureManifest, settings: LocalEdgeCore_ExposureHostnamesConfig): LocalEdgeCore_ExposureHostnameEntry[];
 /**

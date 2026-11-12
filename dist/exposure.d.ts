@@ -43,6 +43,25 @@ export type LocalEdgeCore_ExposureApp = {
      * Same tokens as `hostnameTemplate`. The host must still sit directly under a configured wildcard.
      */
     hostnameTemplate?: string | undefined;
+    /**
+     * Exact host for name-based backends; wins over every pattern. It must still sit directly under
+     * a configured wildcard. Meant for route-only apps listed per machine.
+     */
+    host?: string | undefined;
+    /** Proxy overrides for the `/` location. */
+    proxy?: LocalEdgeCore_ExposureProxyOptions | undefined;
+};
+/** Per-location proxy overrides for name-based backends. */
+export type LocalEdgeCore_ExposureProxyOptions = {
+    /**
+     * `Host` header sent upstream instead of the client's, for servers that refuse unknown hosts
+     * (for example a dev server that only accepts `127.0.0.1:<port>`).
+     */
+    upstreamHost?: string | undefined;
+    /** `false` turns response buffering off, for streams such as server-sent events. Default on. */
+    buffering?: boolean | undefined;
+    /** nginx `proxy_read_timeout`. Default `300s`. */
+    readTimeout?: string | undefined;
 };
 /** One loopback port the router's HTTP server blocks listen on. */
 export type LocalEdgeCore_ExposureRouterListener = {
@@ -75,8 +94,11 @@ export type LocalEdgeCore_ExposureStreamRouter = {
     /** nginx `proxy_connect_timeout`. Default `5s`. */
     connectTimeout?: string | undefined;
 };
-/** One extra path route of an app. */
-export type LocalEdgeCore_ExposureAppLocation = {
+/**
+ * One extra path route of an app. `upstreamPath` defaults to `path`; an empty string passes the
+ * request URI through unchanged.
+ */
+export type LocalEdgeCore_ExposureAppLocation = LocalEdgeCore_ExposureProxyOptions & {
     path: string;
     localPort: number;
     upstreamPath?: string | undefined;
