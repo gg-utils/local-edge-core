@@ -61,6 +61,32 @@ export declare function LocalEdgeCore_buildMkcertArgv(options: {
     keyPath: string;
     hostnames: readonly string[];
 }): string[];
+/** Env variable names the lego DNS providers read. Names only: values are never handled here. */
+export declare const LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES: Readonly<Record<string, readonly string[]>>;
+/**
+ * Builds a lego ACME DNS-01 `run` argv. lego's `run` is safe to repeat: it renews only when the
+ * certificate is near expiry, so the same command serves issue and renewal. Pure, so planners can
+ * print the step without issuing anything. The DNS provider reads its credentials from env
+ * variables (see `LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES`); none go on the command line.
+ */
+export declare function LocalEdgeCore_buildLegoDns01Argv(options: {
+    dnsProvider: string;
+    domains: readonly string[];
+    dataDir: string;
+    email?: string | undefined;
+    server?: string | undefined;
+    keyType?: string | undefined;
+    deployHook?: string | undefined;
+    legoBin?: string | undefined;
+}): string[];
+/**
+ * Paths lego writes for a domain: `<dataDir>/certificates/<domain>.crt` and `.key`, with a
+ * leading `*` written as `_` (so `*.a.example` becomes `_.a.example.crt`).
+ */
+export declare function LocalEdgeCore_legoCertificatePaths(dataDir: string, domain: string): {
+    certPath: string;
+    keyPath: string;
+};
 /** Ensures TLS certificate and key files exist according to the configured TLS mode. */
 export declare function LocalEdgeCore_ensureTlsFiles(options: LocalEdgeCore_EnsureTlsFilesOptions): Promise<string[]>;
 /**

@@ -12,7 +12,11 @@
  */
 
 import type { LocalEdgeCore_ExposureBackend, LocalEdgeCore_ExposureCommandRunner } from "./exposure.js";
-import { LOCAL_EDGE_CORE_HOSTNAMES_BACKEND, LocalEdgeCore_createHostnamesBackend } from "./exposure-hostnames.js";
+import {
+  type LocalEdgeCore_HostnamesBackendOptions,
+  LOCAL_EDGE_CORE_HOSTNAMES_BACKEND,
+  LocalEdgeCore_createHostnamesBackend,
+} from "./exposure-hostnames.js";
 import {
   LOCAL_EDGE_CORE_TAILSCALE_SERVICES_BACKEND,
   LocalEdgeCore_createTailscaleServicesBackend,
@@ -65,7 +69,7 @@ export function LocalEdgeCore_createExposureBackend(
   options: {
     runner?: LocalEdgeCore_ExposureCommandRunner | undefined;
     tailscaleBin?: string | undefined;
-  } = {},
+  } & LocalEdgeCore_HostnamesBackendOptions = {},
 ): LocalEdgeCore_ExposureBackend {
   switch (LocalEdgeCore_resolveExposureBackendName(name)) {
     case LOCAL_EDGE_CORE_TAILSCALE_SERVE_PORTS_BACKEND:

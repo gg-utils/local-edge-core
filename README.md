@@ -92,18 +92,29 @@ and `status`.
 | Backend | Needs | What it does |
 |---|---|---|
 | `tailscale-serve-ports` (default, alias `ports`) | nothing | One tailnet-only HTTPS port per app: `tailscale serve --bg --https=<port> http://127.0.0.1:<localPort>`. |
-| `hostnames` (alias `wildcard-dns-nginx`) | DNS and TLS owner, tailnet admin | Plan only. Hosts are `<app>.<realm>.<method>.<machine>.<rootZone>`, routed by SNI on one loopback router port. `apply` refuses. |
+| `hostnames` (alias `wildcard-dns-nginx`) | DNS and TLS owner | Plan only. Hosts are `<app>.<projectMachineLabel>.<rootZone>` (main realm) or `<app>--<realm>.<projectMachineLabel>.<rootZone>`, routed by SNI on one loopback nginx port. `apply` refuses. |
 | `tailscale-services` | tailnet admin | Plan only: one `svc:<name>` per app. `apply` refuses. |
 
-The `hostnames` plan has these steps:
+The `hostnames` plan has these steps. One wildcard, `*.<projectMachineLabel>.<rootZone>`, covers
+every app and realm, so there is one DNS record and one certificate. The name pattern is a
+template (`{label}`, `{app}`, `{realm}`, `{projectMachine}`, `{rootZone}`) or a function in config;
+every label is checked (lowercase `a-z0-9-`, at most 63 characters, no `--` at positions 3-4)
+and every host must sit directly under the wildcard. Realm slugs come from branch names and are
+cut with a short hash when a label would pass 63 characters.
 
-- One nginx server block per app on `127.0.0.1:<routerPort>`, from `nginx.ts`.
-- The dnsmasq rule and the macOS resolver file, from `dns.ts`.
-- An mkcert wildcard per realm (`*.<realm>.<method>.<machine>.<rootZone>`), from `tls.ts`, or a provided certificate.
-- A raw-TCP Serve mapping of the router port: `tailscale serve --tcp=<port> tcp://127.0.0.1:<port>`.
+- One nginx server block per enabled app on `127.0.0.1:<routerPort>`, `server_name` set to its
+  host. `LocalEdgeCore_renderExposureHostnamesNginxConfig` renders the whole `nginx.conf`, with
+  pid, log and temp paths from config and a default server that rejects unknown names.
+- The provided certificate and key, with a check that their folder is 0700 and outside git.
+- lego DNS-01: the install step (listed, never run), `lego run` for the wildcard with the DNS
+  provider's env variable names only (`vercel`: `VERCEL_API_TOKEN`, `VERCEL_TEAM_ID`), and the
+  renewal step (the same `lego run`, which renews only near expiry).
+- The wildcard `A`/`AAAA` records, from config or `tailscale status --json`; a noop when the
+  config says the owner reports them live.
+- A raw-TCP Serve mapping of the router port: `tailscale serve --bg --tcp=<port> tcp://127.0.0.1:<port>`.
 
-Nothing in the plan is run: the backend starts no services, writes no resolver files and issues
-no certificates. It refuses a protected or non-loopback router port.
+Nothing in the plan is run: the backend issues no certificates, edits no DNS, starts no nginx and
+changes no Serve mapping. It refuses a protected or non-loopback router port.
 
 Guards in `tailscale-serve-ports`:
 

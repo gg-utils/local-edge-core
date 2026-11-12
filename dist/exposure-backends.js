@@ -10,7 +10,7 @@
  * @see src/exposure-plan-only.ts - Plan-only backends.
  * @documentation reviewed=2026-11-11 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
-import { LOCAL_EDGE_CORE_HOSTNAMES_BACKEND, LocalEdgeCore_createHostnamesBackend } from "./exposure-hostnames.js";
+import { LOCAL_EDGE_CORE_HOSTNAMES_BACKEND, LocalEdgeCore_createHostnamesBackend, } from "./exposure-hostnames.js";
 import { LOCAL_EDGE_CORE_TAILSCALE_SERVICES_BACKEND, LocalEdgeCore_createTailscaleServicesBackend, } from "./exposure-plan-only.js";
 import { LOCAL_EDGE_CORE_TAILSCALE_SERVE_PORTS_BACKEND, LocalEdgeCore_createTailscaleServePortsBackend, } from "./exposure-tailscale-serve.js";
 /** Backend names known to the registry, default first. */

@@ -1,12 +1,13 @@
 /**
- * @fileoverview Verifies the plan-only `hostnames` exposure backend: host shape, SNI server
- * blocks on the router port, dnsmasq and resolver text, the mkcert or provided TLS step, the
- * raw-TCP Serve step, the guards, and that apply always refuses.
+ * @fileoverview Verifies the plan-only `hostnames` exposure backend: compact names under one
+ * wildcard, the rendered router config, the provided TLS folder check, the lego install, issue
+ * and renewal steps (env names only), the wildcard DNS records, the raw-TCP Serve step, the
+ * guards, and that apply always refuses.
  *
  * @testing Node test runner (tsx): npm run test -- src/exposure-hostnames.unit.test.ts
  *
  * @see src/exposure-hostnames.ts - Backend under test.
- * @documentation reviewed=2026-11-11 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
+ * @documentation reviewed=2026-11-12 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 
 import assert from "node:assert/strict";
@@ -16,20 +17,40 @@ import type { LocalEdgeCore_ExposureHostnamesConfig, LocalEdgeCore_ExposureManif
 import { LocalEdgeCore_renderExposurePlanText } from "./exposure.js";
 import { LocalEdgeCore_createExposureBackend } from "./exposure-backends.js";
 import {
+  type LocalEdgeCore_PrivateDirProbe,
   LocalEdgeCore_buildExposureHostname,
   LocalEdgeCore_planExposureHostnames,
+  LocalEdgeCore_renderExposureHostnamesNginxConfig,
+  LocalEdgeCore_validateExposureHostnames,
 } from "./exposure-hostnames.js";
-import { LocalEdgeCore_buildMkcertArgv } from "./tls.js";
+
+const privateDirs: LocalEdgeCore_PrivateDirProbe = () => ({ exists: true, mode: 0o700, gitRoot: null });
 
 const settings: LocalEdgeCore_ExposureHostnamesConfig = {
+  projectMachineLabel: "proj-m1",
+  rootZone: "example.test",
   realm: "main",
-  method: "nginx",
-  machine: "m3",
-  rootZone: "example.internal",
   routerHost: "127.0.0.1",
   routerPort: 8460,
-  tls: { mode: "mkcert", certDir: "/certs" },
-  dns: { listenAddress: "127.0.0.1", port: 53535, resolverDir: "/etc/resolver", logPath: "/logs/dnsmasq.log" },
+  tls: { mode: "provided", certPath: "/le/tls/wildcard.crt", keyPath: "/le/tls/wildcard.key" },
+  nginx: {
+    confPath: "/le/nginx/nginx.conf",
+    pidPath: "/le/nginx/nginx.pid",
+    errorLogPath: "/le/logs/nginx-error.log",
+    accessLogPath: "/le/logs/nginx-access.log",
+    tempDir: "/le/nginx/tmp",
+    mimeTypesPath: "/opt/nginx/mime.types",
+  },
+  acme: {
+    client: "lego",
+    dnsProvider: "vercel",
+    dataDir: "/le/lego",
+    keyType: "EC256",
+    deployHook: "/le/bin/cert-deploy.sh",
+    runScript: "/le/bin/cert-run.sh",
+    renewal: "daily launch agent",
+  },
+  addresses: { ipv4: "100.64.0.9" },
 };
 
 function manifest(overrides: Partial<LocalEdgeCore_ExposureManifest> = {}): LocalEdgeCore_ExposureManifest {
@@ -37,104 +58,143 @@ function manifest(overrides: Partial<LocalEdgeCore_ExposureManifest> = {}): Loca
     protectedPorts: [443, 8445],
     hostnames: settings,
     apps: [
-      { id: "auth", enabled: true, localPort: 4300 },
-      { id: "fellow-rebuild", enabled: true, localPort: 3210 },
+      { id: "auth", edgeName: "auth-api", enabled: true, localPort: 4300 },
+      { id: "web", edgeName: "web-rebuild", enabled: true, localPort: 3210 },
       { id: "later", enabled: false, localPort: 3300 },
     ],
     ...overrides,
   };
 }
 
-void test("hosts follow surface.realm.method.machine.rootZone", () => {
-  assert.equal(LocalEdgeCore_buildExposureHostname(settings, "fellow-rebuild"), "fellow-rebuild.main.nginx.m3.example.internal");
+function plan(candidate = manifest()) {
+  return LocalEdgeCore_planExposureHostnames(candidate, { inspectDir: privateDirs });
+}
+
+void test("names are <app>.<project-machine>.<zone> for main and <app>--<realm> otherwise", () => {
+  assert.equal(LocalEdgeCore_buildExposureHostname(settings, "web-rebuild"), "web-rebuild.proj-m1.example.test");
+  assert.equal(
+    LocalEdgeCore_buildExposureHostname({ ...settings, realm: "Feat/Login" }, "web-rebuild"),
+    "web-rebuild--feat-login.proj-m1.example.test",
+  );
+  assert.equal(
+    LocalEdgeCore_buildExposureHostname({ ...settings, buildHostname: (p) => `${p.app}.x.${p.rootZone}` }, "a"),
+    "a.x.example.test",
+  );
 });
 
-void test("plans one SNI server block per enabled app on the loopback router port", () => {
-  const actions = LocalEdgeCore_planExposureHostnames(manifest());
+void test("plans one server block per enabled app, then router, TLS, ACME, DNS and tailnet steps", () => {
+  const actions = plan();
   assert.deepEqual(
     actions.map((a) => [a.appId, a.kind]),
     [
       ["auth", "manual"],
-      ["fellow-rebuild", "manual"],
+      ["web", "manual"],
       ["later", "skip"],
-      ["router:dns", "manual"],
+      ["router:nginx", "manual"],
       ["router:tls", "manual"],
+      ["router:acme-install", "manual"],
+      ["router:acme", "manual"],
+      ["router:acme-renew", "manual"],
+      ["router:dns", "manual"],
       ["router:tailnet", "manual"],
     ],
   );
-  const fellow = actions[1];
-  assert.equal(fellow?.edgeUrl, "https://fellow-rebuild.main.nginx.m3.example.internal:8460");
-  assert.match(fellow?.detail ?? "", /listen 127\.0\.0\.1:8460 ssl;/);
-  assert.match(fellow?.detail ?? "", /server_name fellow-rebuild\.main\.nginx\.m3\.example\.internal;/);
-  assert.match(fellow?.detail ?? "", /127\.0\.0\.1:3210/);
-  assert.match(fellow?.detail ?? "", /ssl_certificate \/certs\/main\.nginx\.m3\.example\.internal\.pem;/);
+  const web = actions[1];
+  assert.equal(web?.edgeUrl, "https://web-rebuild.proj-m1.example.test:8460");
+  assert.match(web?.detail ?? "", /listen 127\.0\.0\.1:8460 ssl;/);
+  assert.match(web?.detail ?? "", /server_name web-rebuild\.proj-m1\.example\.test;/);
+  assert.match(web?.detail ?? "", /set \$upstream_web_rebuild 127\.0\.0\.1:3210;/);
+  assert.match(web?.detail ?? "", /ssl_certificate \/le\/tls\/wildcard\.crt;/);
 });
 
-void test("DNS step renders the dnsmasq rule and the macOS resolver file", () => {
-  const dns = LocalEdgeCore_planExposureHostnames(manifest()).find((a) => a.appId === "router:dns");
-  assert.match(dns?.detail ?? "", /address=\/\.nginx\.m3\.example\.internal\/127\.0\.0\.1/);
-  assert.match(dns?.detail ?? "", /listen-address=127\.0\.0\.1/);
-  assert.match(dns?.detail ?? "", /# \/etc\/resolver\/example\.internal/);
-  assert.match(dns?.detail ?? "", /nameserver 127\.0\.0\.1\nport 53535/);
-  assert.equal(dns?.requires, "dns-tls-owner");
+void test("renders a whole nginx.conf with pid, logs and temp paths from config", () => {
+  const text = LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest());
+  assert.match(text, /^pid \/le\/nginx\/nginx\.pid;$/m);
+  assert.match(text, /^error_log \/le\/logs\/nginx-error\.log;$/m);
+  assert.match(text, /access_log \/le\/logs\/nginx-access\.log;/);
+  assert.match(text, /client_body_temp_path \/le\/nginx\/tmp\/client_body;/);
+  assert.match(text, /include {7}\/opt\/nginx\/mime\.types;/);
+  assert.match(text, /listen 127\.0\.0\.1:8460 ssl default_server;\n {4}server_name _;\n {4}ssl_reject_handshake on;/);
+  assert.equal(text.match(/server_name [a-z]/g)?.length, 2);
+  assert.ok(!text.includes("later"));
+  assert.throws(() => LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest({ hostnames: undefined })));
 });
 
-void test("TLS step is an mkcert wildcard per realm, or the provided pair", () => {
-  const tls = LocalEdgeCore_planExposureHostnames(manifest()).find((a) => a.appId === "router:tls");
-  assert.deepEqual(tls?.argv, [
-    "mkcert",
-    "-cert-file",
-    "/certs/main.nginx.m3.example.internal.pem",
-    "-key-file",
-    "/certs/main.nginx.m3.example.internal-key.pem",
-    "*.main.nginx.m3.example.internal",
+void test("TLS step reports when the folder is not 0700 or sits in a git checkout", () => {
+  const ok = plan().find((a) => a.appId === "router:tls");
+  assert.match(ok?.reason ?? "", /0700 and outside git/);
+  const bad = LocalEdgeCore_planExposureHostnames(manifest(), {
+    inspectDir: () => ({ exists: true, mode: 0o755, gitRoot: "/repo" }),
+  }).find((a) => a.appId === "router:tls");
+  assert.match(bad?.reason ?? "", /mode 755, want 700/);
+  assert.match(bad?.reason ?? "", /inside the git checkout \/repo/);
+});
+
+void test("ACME steps list install, issue and renewal with env names only", () => {
+  const actions = plan();
+  assert.deepEqual(actions.find((a) => a.appId === "router:acme-install")?.argv, ["brew", "install", "lego"]);
+  const acme = actions.find((a) => a.appId === "router:acme");
+  assert.deepEqual(acme?.argv, [
+    "lego", "run", "--accept-tos", "--dns", "vercel", "--domains", "*.proj-m1.example.test",
+    "--key-type", "EC256", "--path", "/le/lego", "--deploy-hook", "/le/bin/cert-deploy.sh",
   ]);
-  const provided = LocalEdgeCore_planExposureHostnames(
-    manifest({ hostnames: { ...settings, tls: { mode: "provided", certPath: "/p/c.pem", keyPath: "/p/k.pem" } } }),
-  );
-  const step = provided.find((a) => a.appId === "router:tls");
-  assert.equal(step?.argv, undefined);
-  assert.match(step?.detail ?? "", /cert: \/p\/c\.pem/);
-  assert.match(provided[0]?.detail ?? "", /ssl_certificate \/p\/c\.pem;/);
+  assert.match(acme?.reason ?? "", /VERCEL_API_TOKEN, VERCEL_TEAM_ID/);
+  assert.deepEqual(actions.find((a) => a.appId === "router:acme-renew")?.argv, ["/bin/sh", "/le/bin/cert-run.sh"]);
+});
+
+void test("DNS step lists the wildcard records, or a noop when the owner reports them live", () => {
+  assert.equal(plan().find((a) => a.appId === "router:dns")?.detail, "*.proj-m1 A 100.64.0.9");
+  const live = plan(manifest({ hostnames: { ...settings, dnsLive: true } })).find((a) => a.appId === "router:dns");
+  assert.equal(live?.kind, "noop");
+  const read = LocalEdgeCore_planExposureHostnames(manifest({ hostnames: { ...settings, addresses: undefined } }), {
+    inspectDir: privateDirs,
+    runner: () => ({ status: 0, stdout: JSON.stringify({ Self: { TailscaleIPs: ["100.64.0.7", "fd7a::7"] } }), stderr: "" }),
+  }).find((a) => a.appId === "router:dns");
+  assert.equal(read?.detail, "*.proj-m1 A 100.64.0.7\n*.proj-m1 AAAA fd7a::7");
 });
 
 void test("tailnet step is a raw TCP Serve mapping of the router port, and can be left out", () => {
-  const tailnet = LocalEdgeCore_planExposureHostnames(manifest()).find((a) => a.appId === "router:tailnet");
-  assert.deepEqual(tailnet?.argv, ["tailscale", "serve", "--tcp=8460", "tcp://127.0.0.1:8460"]);
-  assert.equal(tailnet?.requires, "tailnet-admin");
-  const off = LocalEdgeCore_planExposureHostnames(manifest({ hostnames: { ...settings, tailnetTcp: false } }));
+  const tailnet = plan().find((a) => a.appId === "router:tailnet");
+  assert.deepEqual(tailnet?.argv, ["tailscale", "serve", "--bg", "--tcp=8460", "tcp://127.0.0.1:8460"]);
+  const off = plan(manifest({ hostnames: { ...settings, tailnetTcp: false } }));
   assert.ok(!off.some((a) => a.appId === "router:tailnet"));
 });
 
-void test("refuses a protected router port, a non-loopback router, bad labels and missing settings", () => {
+void test("refuses protected or non-loopback routers, bad labels, duplicates and missing settings", () => {
   const cases: LocalEdgeCore_ExposureManifest[] = [
     manifest({ hostnames: { ...settings, routerPort: 8445 } }),
     manifest({ hostnames: { ...settings, routerHost: "0.0.0.0" } }),
-    manifest({ hostnames: { ...settings, machine: "M3 Ultra" } }),
+    manifest({ hostnames: { ...settings, projectMachineLabel: "Proj M1" } }),
+    manifest({ hostnames: { ...settings, tls: { ...settings.tls, certPath: "tls/c.crt" } } }),
+    manifest({ hostnames: { ...settings, hostnameTemplate: "{label}.other.{rootZone}" } }),
     manifest({ hostnames: undefined }),
     manifest({ apps: [{ id: "clash", enabled: true, localPort: 8460 }] }),
+    manifest({ apps: [{ id: "a--b", enabled: true, localPort: 3000 }] }),
+    manifest({
+      apps: [
+        { id: "one", edgeName: "same", enabled: true, localPort: 3000 },
+        { id: "two", edgeName: "same", enabled: true, localPort: 3001 },
+      ],
+    }),
   ];
   for (const candidate of cases) {
-    const actions = LocalEdgeCore_planExposureHostnames(candidate);
-    assert.equal(actions[0]?.kind, "refuse", JSON.stringify(candidate.hostnames));
+    const actions = plan(candidate);
+    assert.equal(actions[0]?.kind, "refuse", JSON.stringify(candidate.hostnames ?? candidate.apps));
     assert.ok(!actions.some((a) => a.appId.startsWith("router:")));
   }
+  assert.deepEqual(LocalEdgeCore_validateExposureHostnames(manifest()), []);
 });
 
 void test("backend is plan-only: apply and remove refuse even with --apply", () => {
-  const backend = LocalEdgeCore_createExposureBackend("hostnames");
-  const plan = backend.plan(manifest());
-  assert.equal(plan.applicable, false);
-  assert.equal(plan.hostname, "*.main.nginx.m3.example.internal");
-  assert.match(LocalEdgeCore_renderExposurePlanText(plan), /needs tailnet-admin/);
-  assert.equal(backend.apply(plan, { apply: true }).ok, false);
+  const backend = LocalEdgeCore_createExposureBackend("hostnames", {
+    runner: () => ({ status: 1, stdout: "", stderr: "" }),
+  });
+  const built = backend.plan(manifest());
+  assert.equal(built.applicable, false);
+  assert.equal(built.hostname, "*.proj-m1.example.test");
+  assert.match(LocalEdgeCore_renderExposurePlanText(built), /needs dns-tls-owner/);
+  assert.equal(backend.apply(built, { apply: true }).ok, false);
   assert.equal(backend.remove(manifest(), { apply: true }).ok, false);
   assert.deepEqual(backend.status(manifest()).map((r) => r.state), ["unknown", "unknown", "disabled"]);
-  assert.equal(backend.status(manifest())[0]?.edgeUrl, "https://auth.main.nginx.m3.example.internal:8460");
-});
-
-void test("mkcert argv builder matches what the generator runs", () => {
-  assert.deepEqual(LocalEdgeCore_buildMkcertArgv({ certPath: "c", keyPath: "k", hostnames: ["a", "b"] }), [
-    "mkcert", "-cert-file", "c", "-key-file", "k", "a", "b",
-  ]);
+  assert.equal(backend.status(manifest())[0]?.edgeUrl, "https://auth-api.proj-m1.example.test:8460");
 });

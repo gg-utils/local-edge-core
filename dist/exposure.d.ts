@@ -34,35 +34,82 @@ export type LocalEdgeCore_ExposureApp = {
      */
     replaceExistingMapping?: boolean | undefined;
 };
-/** TLS source for the hostname backend: an mkcert wildcard per realm, or a provided pair. */
-export type LocalEdgeCore_ExposureHostnamesTls = {
-    mode: "mkcert";
-    certDir: string;
-} | {
-    mode: "provided";
-    certPath: string;
-    keyPath: string;
+/** Parts a hostname pattern receives for one app. */
+export type LocalEdgeCore_ExposureHostnameParts = {
+    app: string;
+    realm: string;
+    mainRealm: string;
+    projectMachineLabel: string;
+    rootZone: string;
 };
 /**
- * Settings for the hostname backend. Hosts are `<app>.<realm>.<method>.<machine>.<rootZone>`,
- * routed by SNI on one loopback router port.
+ * Settings for the `hostnames` backend. Names are public DNS under a zone the owner controls;
+ * the default pattern is `<app>.<projectMachineLabel>.<rootZone>` for the main realm and
+ * `<app>--<realm>.<projectMachineLabel>.<rootZone>` otherwise, so one wildcard covers every host.
  */
 export type LocalEdgeCore_ExposureHostnamesConfig = {
-    realm: string;
-    method: string;
-    machine: string;
+    /** One DNS label naming the project and machine, for example `proj-m1`. */
+    projectMachineLabel: string;
     rootZone: string;
+    /** Realm (branch or worktree) name; sanitized into a slug. */
+    realm: string;
+    /** Realm that gets plain `<app>` labels. Defaults to `main`. */
+    mainRealm?: string | undefined;
+    /**
+     * Hostname template with `{app}`, `{realm}`, `{label}`, `{projectMachine}`, `{rootZone}`.
+     * Default `{label}.{projectMachine}.{rootZone}`.
+     */
+    hostnameTemplate?: string | undefined;
+    /** Function form of the pattern; wins over `hostnameTemplate`. */
+    buildHostname?: ((parts: LocalEdgeCore_ExposureHostnameParts) => string) | undefined;
+    /** Wildcard that every host must sit directly under. Default `*.{projectMachine}.{rootZone}`. */
+    wildcardTemplate?: string | undefined;
     /** Loopback router listen host. Must be 127.0.0.1. */
     routerHost: string;
     routerPort: number;
-    tls: LocalEdgeCore_ExposureHostnamesTls;
-    /** Local dnsmasq listener used by the planned resolver file. */
-    dns: {
-        listenAddress: string;
-        port: number;
-        resolverDir: string;
-        logPath: string;
+    /** Certificate and key the router uses; kept in a 0700 folder outside any git checkout. */
+    tls: {
+        mode: "provided";
+        certPath: string;
+        keyPath: string;
     };
+    /** Where the rendered router config lives and what it writes. All paths absolute. */
+    nginx: {
+        confPath: string;
+        pidPath: string;
+        errorLogPath: string;
+        accessLogPath: string;
+        /** Folder for nginx temp files (client bodies, proxy buffers). */
+        tempDir: string;
+        /** `mime.types` file to include, for example the one shipped with nginx. */
+        mimeTypesPath: string;
+    };
+    /** Plan-only ACME DNS-01 issuing step. Omit to leave issuing out of the plan. */
+    acme?: {
+        client: "lego";
+        dnsProvider: string;
+        dataDir: string;
+        /** ACME account email. Left out of the command when omitted. */
+        email?: string | undefined;
+        /** ACME directory URL. lego's default when omitted. */
+        server?: string | undefined;
+        keyType?: string | undefined;
+        /** Script lego runs after issuing; copies the cert and key to `tls` paths. */
+        deployHook?: string | undefined;
+        /** Wrapper the owner runs to issue and renew (sources the token file, then runs lego). */
+        runScript?: string | undefined;
+        /** How renewal is scheduled, for the plan text (for example a launch agent). */
+        renewal?: string | undefined;
+        /** Install step shown in the plan, never run. Defaults to `brew install lego`. */
+        installArgv?: readonly string[] | undefined;
+    } | undefined;
+    /** Tailnet addresses for the wildcard records. Read from `tailscale status --json` when omitted. */
+    addresses?: {
+        ipv4?: string | undefined;
+        ipv6?: string | undefined;
+    } | undefined;
+    /** The owner reports the wildcard records are live; the DNS step becomes a noop. */
+    dnsLive?: boolean | undefined;
     /** Plan a tailnet raw-TCP Serve mapping of the router port. Defaults to true. */
     tailnetTcp?: boolean | undefined;
 };

@@ -11,6 +11,7 @@
  * @documentation reviewed=2026-11-11 standard=FILE_OVERVIEW_STANDARDS_TYPESCRIPT@3
  */
 import type { LocalEdgeCore_ExposureBackend, LocalEdgeCore_ExposureCommandRunner } from "./exposure.js";
+import { type LocalEdgeCore_HostnamesBackendOptions } from "./exposure-hostnames.js";
 /** Backend names known to the registry, default first. */
 export declare const LOCAL_EDGE_CORE_EXPOSURE_BACKEND_NAMES: readonly ["tailscale-serve-ports", "hostnames", "tailscale-services"];
 /**
@@ -30,7 +31,7 @@ export declare function LocalEdgeCore_isExposureBackendName(name: string): name 
 export declare function LocalEdgeCore_createExposureBackend(name: string, options?: {
     runner?: LocalEdgeCore_ExposureCommandRunner | undefined;
     tailscaleBin?: string | undefined;
-}): LocalEdgeCore_ExposureBackend;
+} & LocalEdgeCore_HostnamesBackendOptions): LocalEdgeCore_ExposureBackend;
 export * from "./exposure.js";
 export * from "./exposure-hostnames.js";
 export * from "./exposure-plan-only.js";
