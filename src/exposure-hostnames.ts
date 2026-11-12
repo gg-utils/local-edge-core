@@ -510,7 +510,13 @@ function LocalEdgeCore_upstreamHostProblem(host: string): string | null {
       : "a valid bracketed IPv6 literal";
   }
   if (/^[0-9.]+$/.test(host)) {
-    return LocalEdgeCore_isIpv4(host) ? null : "a valid IPv4 address (four parts, 0-255)";
+    if (LocalEdgeCore_isIpv4(host)) {
+      return null;
+    }
+    // A bare number such as `0` is not a name either; say what to give instead.
+    return /^[0-9]+$/.test(host)
+      ? "a host that is not all digits (an all-digit host must be a full dotted IPv4 address with four parts, 0-255, such as 192.0.2.10)"
+      : "a valid IPv4 address (four parts, 0-255)";
   }
   if (host.length > LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH) {
     return `a host of at most ${String(LOCAL_EDGE_CORE_DNS_NAME_MAX_LENGTH)} characters`;
@@ -580,7 +586,8 @@ const LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES = {
  * @param field - Field name used in the message, for example `play: location / upstreamHost`.
  * @param kind - Which value this is.
  * @param value - Value from config.
- * @returns `null` when the value is safe to write unquoted, otherwise the problem.
+ * @returns `null` when the value is safe to write unquoted, otherwise the problem. The problem names
+ *   the field, the rule and the length, and never contains any part of the value.
  * @example
  * ```typescript
  * LocalEdgeCore_nginxValueProblem("play: location / readTimeout", "readTimeout", "3600s"); // null
@@ -597,16 +604,18 @@ export function LocalEdgeCore_nginxValueProblem(
     return `${field} must be a non-empty string`;
   }
   const shape = LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES[kind];
-  const shown = JSON.stringify(value.length > 60 ? `${value.slice(0, 60)}...` : value);
+  // The value is never echoed: it may be oversized, hold control characters or be a secret that
+  // was pasted into the wrong field. The message names the field, the rule and the length.
+  const size = `${String(value.length)} character${value.length === 1 ? "" : "s"}`;
   if (LOCAL_EDGE_CORE_NGINX_UNSAFE_ARGUMENT.test(value)) {
-    return `${field} ${shown} has a character nginx reads as syntax (whitespace, a quote, ; { } # $ \\ or a control character)`;
+    return `${field} (${size}) has a character nginx reads as syntax (whitespace, a quote, ; { } # $ \\ or a control character)`;
   }
   if (value.length > shape.maxLength) {
-    return `${field} is ${String(value.length)} characters, longer than ${String(shape.maxLength)}`;
+    return `${field} is ${size}, longer than ${String(shape.maxLength)}`;
   }
   const mustBe = shape.problem(value);
   if (mustBe !== null) {
-    return `${field} ${shown} must be ${mustBe}`;
+    return `${field} (${size}) must be ${mustBe}`;
   }
   return null;
 }

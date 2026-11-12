@@ -225,7 +225,8 @@ declare const LOCAL_EDGE_CORE_NGINX_VALUE_SHAPES: {
  * @param field - Field name used in the message, for example `play: location / upstreamHost`.
  * @param kind - Which value this is.
  * @param value - Value from config.
- * @returns `null` when the value is safe to write unquoted, otherwise the problem.
+ * @returns `null` when the value is safe to write unquoted, otherwise the problem. The problem names
+ *   the field, the rule and the length, and never contains any part of the value.
  * @example
  * ```typescript
  * LocalEdgeCore_nginxValueProblem("play: location / readTimeout", "readTimeout", "3600s"); // null

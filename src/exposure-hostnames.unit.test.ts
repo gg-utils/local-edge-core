@@ -411,8 +411,8 @@ void test("hostnames: exact hosts and per-location proxy overrides", () => {
     }),
   ).join("\n");
   assert.match(bad, /a\.elsewhere\.test is not directly under/);
-  assert.match(bad, /upstreamHost "x; y" has a character nginx reads as syntax/);
-  assert.match(bad, /readTimeout "long" must be an nginx time/);
+  assert.match(bad, /upstreamHost \(4 characters\) has a character nginx reads as syntax/);
+  assert.match(bad, /readTimeout \(4 characters\) must be an nginx time/);
   assert.match(bad, /c: b\.m1\.example\.test is already used by b/);
 });
 
@@ -686,4 +686,55 @@ void test("hostnames: two-character apps work in main and get a clear error in o
   const problems = LocalEdgeCore_validateExposureHostnames(other);
   assert.equal(problems.length, 1);
   assert.match(problems[0] ?? "", /^ab: local-edge-core-hostname-short-app: .*edgeName/);
+});
+
+void test("hostnames: value problems never echo any part of the value", () => {
+  const kinds = ["host", "upstreamHost", "readTimeout"] as const;
+  // An oversized value that also holds an unsafe character, with a marker no message may repeat.
+  const marker = "SECRETMARKER";
+  const oversizedUnsafe = `${marker};${"z".repeat(400)}`;
+  for (const kind of kinds) {
+    const problem = LocalEdgeCore_nginxValueProblem(`x: ${kind}`, kind, oversizedUnsafe) ?? "";
+    assert.match(problem, new RegExp(`^x: ${kind} \\(${String(oversizedUnsafe.length)} characters\\) has a character nginx reads as syntax`));
+    assert.equal(problem.includes(marker), false, `${kind}: ${problem}`);
+    assert.equal(problem.includes("zzz"), false, `${kind}: ${problem}`);
+    assert.throws(
+      () => LocalEdgeCore_nginxValueArgument(`x: ${kind}`, kind, oversizedUnsafe),
+      (error: unknown) => error instanceof Error && /nginx-unsafe-value/.test(error.message) && !error.message.includes(marker),
+    );
+  }
+  // Shape and length problems on a safe value do not echo it either.
+  for (const [kind, value] of [["host", "Marker.Example.Test"], ["readTimeout", "marker"], ["upstreamHost", "marker:99999"], ["host", `marker${"q".repeat(300)}`]] as const) {
+    const problem = LocalEdgeCore_nginxValueProblem(`x: ${kind}`, kind, value) ?? "";
+    assert.notEqual(problem, "");
+    assert.equal(problem.toLowerCase().includes("marker"), false, problem);
+    assert.equal(problem.includes("qqq"), false, problem);
+  }
+  // The same holds through validation of a manifest.
+  const hostnames = { ...settings, extraWildcardTemplates: ["*.m1.{rootZone}"] };
+  const joined = LocalEdgeCore_validateExposureHostnames(
+    manifest({
+      hostnames,
+      apps: [
+        { id: "a", enabled: true, localPort: 3001, host: "a.m1.example.test", proxy: { upstreamHost: oversizedUnsafe, readTimeout: oversizedUnsafe } },
+        { id: "b", enabled: true, localPort: 3002, host: oversizedUnsafe },
+      ],
+    }),
+  ).join("\n");
+  assert.match(joined, /upstreamHost/);
+  assert.equal(joined.includes(marker), false, joined);
+});
+
+void test("hostnames: a bare all-digit upstreamHost is refused with a message that asks for a full dotted IPv4 address", () => {
+  for (const value of ["0", "12345", "0:80"]) {
+    const problem = LocalEdgeCore_nginxValueProblem("upstreamHost", "upstreamHost", value) ?? "";
+    assert.match(problem, /an all-digit host must be a full dotted IPv4 address/, value);
+    assert.throws(
+      () => LocalEdgeCore_nginxValueArgument("upstreamHost", "upstreamHost", value),
+      /local-edge-core-nginx-unsafe-value: .*an all-digit host must be a full dotted IPv4 address/,
+    );
+  }
+  // Dotted but incomplete values keep the general IPv4 message; a full address still passes.
+  assert.match(LocalEdgeCore_nginxValueProblem("upstreamHost", "upstreamHost", "1.2.3") ?? "", /valid IPv4 address \(four parts, 0-255\)/);
+  assert.equal(LocalEdgeCore_nginxValueProblem("upstreamHost", "upstreamHost", "192.0.2.10:8080"), null);
 });

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 ### Added
 
@@ -10,12 +10,15 @@
   - `buffering: false` renders `proxy_buffering off`, for event streams. It must be a boolean.
   - `readTimeout` sets `proxy_read_timeout` (an nginx time such as `3600s`, at most 9 characters). The default stays `300s`.
 - **Shared value check.** `LocalEdgeCore_nginxValueProblem` and `LocalEdgeCore_nginxValueArgument` check the exact `host`, `upstreamHost` and `readTimeout` for length, characters nginx reads as syntax, and shape. Validation reports the problem, and render throws `local-edge-core-nginx-unsafe-value`.
+  - A problem names the field, the rule and the length of the value, and never repeats any part of the value (an oversized value that also held an unsafe character used to show its first 60 characters).
+  - A bare all-digit `upstreamHost` such as `0` is still refused, now with a message saying an all-digit host must be a full dotted IPv4 address.
 
 ### Changed
 
 - An empty `upstreamPath` on an extra location is now accepted (it was refused before) and passes the request URI through unchanged (`proxy_pass http://127.0.0.1:<port>;` with no URI part).
 - `LocalEdgeCore_resolveTailnetSuffix` now falls back to the reserved placeholder `tailnet.example`, exported as `LOCAL_EDGE_CORE_FALLBACK_TAILNET_SUFFIX`, instead of a hard-coded tailnet name. The return type is unchanged; pass a suffix or rely on detection to get a working value.
 - Test fixtures use reserved documentation names only.
+- `LOCAL_EDGE_CORE_FALLBACK_TAILNET_SUFFIX` and `LocalEdgeCore_resolveTailnetSuffix` carry `@example` documentation with reserved example values.
 
 ## 0.3.0
 
