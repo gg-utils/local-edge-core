@@ -438,6 +438,12 @@ export function LocalEdgeCore_validateExposureHostnames(manifest: LocalEdgeCore_
   if (workers !== undefined && !(Number.isInteger(workers) && workers >= 1 && workers <= 1_048_576)) {
     problems.push(`hostnames.nginx.workerConnections ${LocalEdgeCore_messageNumber(workers)} is not a positive integer`);
   }
+  const errorLogLevel = settings.nginx.errorLogLevel;
+  if (errorLogLevel !== undefined && !LOCAL_EDGE_CORE_NGINX_ERROR_LOG_LEVELS.includes(errorLogLevel)) {
+    problems.push(
+      `hostnames.nginx.errorLogLevel (${LocalEdgeCore_messageInputSize(errorLogLevel)}) must be one of ${LOCAL_EDGE_CORE_NGINX_ERROR_LOG_LEVELS.join(", ")}`,
+    );
+  }
   problems.push(...LocalEdgeCore_pathProblems(settings));
   if (settings.acme && LOCAL_EDGE_CORE_LEGO_DNS_PROVIDER_ENV_NAMES[settings.acme.dnsProvider] === undefined) {
     problems.push(
@@ -863,6 +869,21 @@ function LocalEdgeCore_streamProblems(
   return problems;
 }
 
+/** The nginx `error_log` levels `nginx.errorLogLevel` accepts, from most to least verbose. */
+const LOCAL_EDGE_CORE_NGINX_ERROR_LOG_LEVELS: readonly string[] = ["debug", "info", "notice", "warn", "error", "crit", "alert", "emerg"];
+
+/**
+ * The `error_log` level a validated config renders: `nginx.errorLogLevel` when set, otherwise `warn`
+ * in `connection` mode and `crit` in `proxy-protocol` mode (an error line at `warn` holds the
+ * client address, which in that mode is the real one, and the request line with its query string).
+ *
+ * @param settings - Validated hostnames settings.
+ * @returns One of the nginx levels, safe to write unquoted.
+ */
+function LocalEdgeCore_errorLogLevel(settings: LocalEdgeCore_ExposureHostnamesConfig): string {
+  return settings.nginx.errorLogLevel ?? (settings.clientAddress === "proxy-protocol" ? "crit" : "warn");
+}
+
 /** The two accepted `clientAddress` modes. */
 const LOCAL_EDGE_CORE_CLIENT_ADDRESS_MODES: readonly string[] = ["connection", "proxy-protocol"];
 
@@ -874,7 +895,12 @@ type LocalEdgeCore_ProxyProtocolMode = {
   clientPort: number;
 };
 
-/** The `proxy-protocol` mode of a validated config, or null when the config uses the connection address. */
+/**
+ * The `proxy-protocol` mode of a validated config, or null when the config uses the connection address.
+ *
+ * @param settings - Validated hostnames settings.
+ * @returns The stream router, the three extra ports and the client port of the extra HTTP listener, or `null`.
+ */
 function LocalEdgeCore_proxyProtocolMode(settings: LocalEdgeCore_ExposureHostnamesConfig): LocalEdgeCore_ProxyProtocolMode | null {
   const { stream, proxyProtocol } = settings;
   if (settings.clientAddress !== "proxy-protocol" || stream === undefined || proxyProtocol === undefined) {
@@ -892,6 +918,10 @@ function LocalEdgeCore_proxyProtocolMode(settings: LocalEdgeCore_ExposureHostnam
 /**
  * Checks `clientAddress` and, for `proxy-protocol`, the stream router it builds on and the three
  * extra loopback ports (valid, unprotected, distinct from each other and from every other port).
+ *
+ * @param manifest - Manifest whose protected ports and app ports the new ports must avoid.
+ * @param settings - Hostnames settings under check.
+ * @returns Problems naming the field and the rule, never the value; empty when valid.
  */
 function LocalEdgeCore_proxyProtocolProblems(
   manifest: LocalEdgeCore_ExposureManifest,
@@ -1002,6 +1032,9 @@ function LocalEdgeCore_forwardedValues(listeners: readonly LocalEdgeCore_Resolve
 /**
  * Every HTTP listener that proxies requests: the configured ones plus, in `proxy-protocol` mode,
  * the extra PROXY protocol listener (with the client port the forwarded host and port maps use).
+ *
+ * @param settings - Validated hostnames settings.
+ * @returns The listeners in render order.
  */
 function LocalEdgeCore_httpListeners(settings: LocalEdgeCore_ExposureHostnamesConfig): LocalEdgeCore_ResolvedRouterListener[] {
   const mode = LocalEdgeCore_proxyProtocolMode(settings);
@@ -1009,13 +1042,24 @@ function LocalEdgeCore_httpListeners(settings: LocalEdgeCore_ExposureHostnamesCo
   return mode === null ? listeners : [...listeners, { port: mode.ports.httpPort, ssl: true, clientPort: mode.clientPort }];
 }
 
-/** The `listen` line of the extra PROXY protocol HTTP listener, as a list of zero or one entries. */
+/**
+ * The `listen` line of the extra PROXY protocol HTTP listener, as a list of zero or one entries.
+ *
+ * @param settings - Validated hostnames settings.
+ * @param suffix - Text added before the `;` (for example ` default_server`).
+ * @returns One indented `listen` line in `proxy-protocol` mode, otherwise none.
+ */
 function LocalEdgeCore_proxyProtocolHttpListens(settings: LocalEdgeCore_ExposureHostnamesConfig, suffix: string): string[] {
   const mode = LocalEdgeCore_proxyProtocolMode(settings);
   return mode === null ? [] : [`    listen ${settings.routerHost}:${String(mode.ports.httpPort)} ssl proxy_protocol${suffix};`];
 }
 
-/** Plan detail lines for the extra PROXY protocol listeners; none in `connection` mode. */
+/**
+ * Plan detail lines for the extra PROXY protocol listeners; none in `connection` mode.
+ *
+ * @param settings - Validated hostnames settings.
+ * @returns The detail lines in plan order.
+ */
 function LocalEdgeCore_proxyProtocolPlanLines(settings: LocalEdgeCore_ExposureHostnamesConfig): string[] {
   const mode = LocalEdgeCore_proxyProtocolMode(settings);
   if (mode === null) {
@@ -1056,6 +1100,9 @@ function LocalEdgeCore_renderStreamBlock(settings: LocalEdgeCore_ExposureHostnam
  * (which is left as it is): a PROXY protocol listener with the same SNI routes that sends the
  * client address on to its upstreams, and a relay that reads the header and forwards plain to the
  * default upstream (which does not accept the PROXY protocol).
+ *
+ * @param settings - Validated hostnames settings.
+ * @returns Config lines to place inside the `stream` block; none in `connection` mode.
  */
 function LocalEdgeCore_renderProxyProtocolStreamServers(settings: LocalEdgeCore_ExposureHostnamesConfig): string[] {
   const mode = LocalEdgeCore_proxyProtocolMode(settings);
@@ -1207,7 +1254,7 @@ export function LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest: Local
     "# Generated by the local-edge hostnames backend. Do not edit: changes are overwritten.",
     "worker_processes 1;",
     `pid ${arg("hostnames.nginx.pidPath", nginx.pidPath)};`,
-    `error_log ${arg("hostnames.nginx.errorLogPath", nginx.errorLogPath)} warn;`,
+    `error_log ${arg("hostnames.nginx.errorLogPath", nginx.errorLogPath)} ${LocalEdgeCore_errorLogLevel(settings)};`,
     `events { worker_connections ${String(nginx.workerConnections ?? 512)}; }`,
     ...LocalEdgeCore_renderStreamBlock(settings),
     "http {",

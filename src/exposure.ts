@@ -213,6 +213,13 @@ export type LocalEdgeCore_ExposureHostnamesConfig = {
     mimeTypesPath?: string | undefined;
     /** `worker_connections`. Default 512. */
     workerConnections?: number | undefined;
+    /**
+     * nginx `error_log` level: one of `debug`, `info`, `notice`, `warn`, `error`, `crit`, `alert`,
+     * `emerg`. Default: `warn` when `clientAddress` is `"connection"` (or unset), `crit` when it is
+     * `"proxy-protocol"`, because at `warn` an error line holds the client address and the request
+     * line with its query string.
+     */
+    errorLogLevel?: string | undefined;
   };
   /** Plan-only ACME DNS-01 issuing step. Omit to leave issuing out of the plan. */
   acme?:

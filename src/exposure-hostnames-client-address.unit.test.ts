@@ -2,7 +2,8 @@
  * @fileoverview Verifies the client address headers, the address-free access log and the
  * `clientAddress: "proxy-protocol"` render of the `hostnames` backend: exact header lines in every
  * proxied location, existing listeners left as they are, the added PROXY protocol listeners,
- * option validation, and `nginx -t` on both renders when an nginx binary is present.
+ * option validation, the `error_log` level, and `nginx -t` on both renders when this nginx has the
+ * stream modules.
  *
  * @testing Node test runner (tsx): npm run test -- src/exposure-hostnames-client-address.unit.test.ts
  *
@@ -200,9 +201,9 @@ void test("client address (proxy-protocol): adds a stream listener, a relay and 
   // The new listener maps like the listener the stream routes point at (client port 443).
   assert.match(proxyProtocolText, /map \$server_port \$local_edge_forwarded_host \{\n {4}8460 \$host:8460;\n {4}8461 \$host;\n {4}8464 \$host;\n {2}\}/);
   assert.match(proxyProtocolText, /map \$server_port \$local_edge_forwarded_port \{\n {4}8460 8460;\n {4}8461 443;\n {4}8464 443;\n {2}\}/);
-  // Nothing outside the added pieces differs in the head of the file.
+  // Nothing outside the added pieces differs in the head of the file, except the error_log level default.
   assert.equal(
-    proxyProtocolText.slice(0, proxyProtocolText.indexOf("stream {")),
+    proxyProtocolText.slice(0, proxyProtocolText.indexOf("stream {")).replace(" crit;\n", " warn;\n"),
     connectionText.slice(0, connectionText.indexOf("stream {")),
   );
 });
@@ -255,60 +256,181 @@ void test("client address: option validation names the problem and never repeats
   );
 });
 
-// nginx -t on both renders, on temp files only, with a throwaway certificate. Skipped when the
-// nginx binary or openssl is missing. nginx -t only parses and opens files under the temp
-// folder; it opens no listening socket and contacts no address.
+void test("error log level: default is warn in connection mode and crit in proxy-protocol mode, unless set", () => {
+  const level = (text: string) => text.match(/^error_log \S+ (\w+);$/m)?.[1];
+  assert.equal(level(connectionText), "warn");
+  assert.equal(level(proxyProtocolText), "crit");
+  const render = (patch: Partial<LocalEdgeCore_ExposureHostnamesConfig["nginx"]>, config = connectionConfig) =>
+    LocalEdgeCore_renderExposureHostnamesNginxConfig(manifestFor({ ...config, nginx: { ...config.nginx, ...patch } }));
+  assert.equal(level(render({}, { ...connectionConfig, clientAddress: "connection" })), "warn");
+  assert.equal(level(render({ errorLogLevel: "error" })), "error");
+  assert.equal(level(render({ errorLogLevel: "warn" }, proxyProtocolConfig)), "warn");
+  assert.equal(level(render({ errorLogLevel: "debug" }, proxyProtocolConfig)), "debug");
+  for (const each of ["debug", "info", "notice", "warn", "error", "crit", "alert", "emerg"]) {
+    assert.equal(level(render({ errorLogLevel: each })), each);
+  }
+  assert.match(connectionText, /^error_log \/le\/logs\/nginx-error\.log warn;$/m);
+});
+
+void test("error log level: an invalid value is a named problem that never repeats the value", () => {
+  const withLevel = (errorLogLevel: unknown) =>
+    LocalEdgeCore_validateExposureHostnames(
+      manifestFor({ ...connectionConfig, nginx: { ...baseSettings.nginx, errorLogLevel: errorLogLevel as string } }),
+    ).join("\n");
+  assert.equal(withLevel(undefined), "");
+  assert.equal(withLevel("crit"), "");
+  const secret = "s3cr3t-level-pasted-by-mistake; user root";
+  const bad = withLevel(secret);
+  assert.match(bad, /hostnames\.nginx\.errorLogLevel \(41 characters\) must be one of debug, info, notice, warn, error, crit, alert, emerg/);
+  assert.ok(!bad.includes("s3cr3t"));
+  assert.match(withLevel("Warn"), /errorLogLevel \(4 characters\) must be one of/);
+  assert.match(withLevel(""), /errorLogLevel \(0 characters\) must be one of/);
+  assert.match(withLevel(5), /errorLogLevel \(not a string\) must be one of/);
+  assert.throws(
+    () => LocalEdgeCore_renderExposureHostnamesNginxConfig(manifestFor({ ...connectionConfig, nginx: { ...baseSettings.nginx, errorLogLevel: secret } })),
+    (error: unknown) => error instanceof Error && /local-edge-core-hostnames-invalid: .*errorLogLevel/.test(error.message) && !error.message.includes("s3cr3t"),
+  );
+});
+
+// nginx -t on both renders, on temp files only, with a throwaway certificate. nginx -t only parses
+// and opens files under the temp folder; it opens no listening socket and contacts no address.
+// A test is skipped, with a reason, when the nginx on this machine cannot parse what the render
+// needs (a build without the stream module, stream_ssl_preread or stream_realip), found by running
+// nginx -t once on a minimal config for each. Any other nginx error is not a skip: the test fails.
 function binaryPath(name: string): string | null {
   const found = spawnSync("sh", ["-c", `command -v ${name}`], { encoding: "utf8" });
   return found.status === 0 ? found.stdout.trim() : null;
 }
 
+/** What one `nginx -t` probe needs: the module name for the skip reason and the config it parses. */
+const nginxProbes = [
+  { module: "stream", body: "listen 127.0.0.1:9; proxy_pass 192.0.2.1:9;" },
+  { module: "stream_ssl_preread", body: "listen 127.0.0.1:9; ssl_preread on; proxy_pass 192.0.2.1:9;" },
+  { module: "stream_realip", body: "listen 127.0.0.1:9 proxy_protocol; set_real_ip_from 192.0.2.1; proxy_pass 192.0.2.1:9;" },
+] as const;
+
+/**
+ * Runs `nginx -t` once per probe on a minimal stream config in a temp folder.
+ *
+ * @param bin - Path of the nginx binary.
+ * @returns The modules this nginx cannot parse (a probe that failed with `unknown directive`); empty when it parses all.
+ */
+function unsupportedNginxModules(bin: string): string[] {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "local-edge-core-probe-"));
+  try {
+    const missing: string[] = [];
+    for (const probe of nginxProbes) {
+      const confPath = path.join(dir, `${probe.module}.conf`);
+      fs.writeFileSync(
+        confPath,
+        `pid ${dir}/nginx.pid;\nevents {}\nstream {\n  server { ${probe.body} }\n}\n`,
+      );
+      const checked = spawnSync(bin, ["-t", "-p", `${dir}/`, "-c", confPath, "-e", path.join(dir, "error.log")], { encoding: "utf8" });
+      if (checked.status !== 0 && /unknown directive/.test(`${checked.stdout}${checked.stderr}`)) {
+        missing.push(probe.module);
+      }
+    }
+    return missing;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * The reason a render cannot be checked with this nginx, or `false` when it can.
+ *
+ * @param bin - Path of the nginx binary, or `null` when none was found.
+ * @param needs - Modules the render needs, in the names `nginxProbes` uses.
+ * @returns A skip reason, or `false` to run the test.
+ */
+function nginxSkipReason(bin: string | null, needs: readonly string[]): string | false {
+  const openssl = binaryPath("openssl");
+  if (bin === null || openssl === null) {
+    return "nginx or openssl binary not found";
+  }
+  const missing = unsupportedNginxModules(bin).filter((module) => needs.includes(module));
+  return missing.length === 0 ? false : `this nginx cannot parse ${missing.join(", ")} (built without it)`;
+}
+
+void test("nginx probe: names the stream modules a fake nginx cannot parse, and does not skip on other errors", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "local-edge-core-fake-nginx-"));
+  try {
+    const fake = (name: string, failOn: string, message: string): string => {
+      const bin = path.join(dir, name);
+      fs.writeFileSync(
+        bin,
+        `#!/bin/sh\nwhile [ $# -gt 0 ]; do [ "$1" = "-c" ] && conf="$2"; shift; done\nif grep -q '${failOn}' "$conf"; then echo '${message}' >&2; exit 1; fi\nexit 0\n`,
+        { mode: 0o755 },
+      );
+      return bin;
+    };
+    assert.deepEqual(unsupportedNginxModules(fake("all-ok", "no-such-text", "")), []);
+    assert.deepEqual(
+      unsupportedNginxModules(fake("no-stream", "stream {", 'nginx: [emerg] unknown directive "stream" in /x/nginx.conf:3')),
+      ["stream", "stream_ssl_preread", "stream_realip"],
+    );
+    assert.deepEqual(
+      unsupportedNginxModules(fake("no-preread", "ssl_preread", 'nginx: [emerg] unknown directive "ssl_preread" in /x/nginx.conf:3')),
+      ["stream_ssl_preread"],
+    );
+    assert.deepEqual(
+      unsupportedNginxModules(fake("no-realip", "set_real_ip_from", 'nginx: [emerg] unknown directive "set_real_ip_from" in /x/nginx.conf:3')),
+      ["stream_realip"],
+    );
+    assert.deepEqual(
+      unsupportedNginxModules(fake("other-error", "stream {", "nginx: [emerg] open() failed (13: Permission denied)")),
+      [],
+      "an error that is not an unknown directive is not a skip",
+    );
+    const reason = nginxSkipReason(fake("no-stream-2", "stream {", 'nginx: [emerg] unknown directive "stream"'), ["stream"]);
+    assert.equal(reason, "this nginx cannot parse stream (built without it)");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 const nginxBin = binaryPath("nginx");
 const opensslBin = binaryPath("openssl");
 
-for (const [mode, hostnames] of [
-  ["connection", connectionConfig],
-  ["proxy-protocol", proxyProtocolConfig],
+for (const [mode, hostnames, needs] of [
+  ["connection", connectionConfig, ["stream", "stream_ssl_preread"]],
+  ["proxy-protocol", proxyProtocolConfig, ["stream", "stream_ssl_preread", "stream_realip"]],
 ] as const) {
-  void test(
-    `nginx -t accepts the ${mode} render`,
-    { skip: nginxBin === null || opensslBin === null ? "nginx or openssl binary not found" : false },
-    () => {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "local-edge-core-nginx-"));
-      try {
-        const certPath = path.join(dir, "wildcard.crt");
-        const keyPath = path.join(dir, "wildcard.key");
-        const made = spawnSync(
-          opensslBin ?? "openssl",
-          ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=example.test", "-keyout", keyPath, "-out", certPath],
-          { encoding: "utf8" },
-        );
-        assert.equal(made.status, 0, "throwaway certificate");
-        const confPath = path.join(dir, "nginx.conf");
-        const text = LocalEdgeCore_renderExposureHostnamesNginxConfig(
-          manifestFor({
-            ...hostnames,
-            tls: { mode: "provided", certPath, keyPath },
-            nginx: {
-              confPath,
-              pidPath: path.join(dir, "nginx.pid"),
-              errorLogPath: path.join(dir, "error.log"),
-              accessLogPath: path.join(dir, "access.log"),
-              tempDir: path.join(dir, "tmp"),
-            },
-          }),
-        );
-        fs.mkdirSync(path.join(dir, "tmp"));
-        fs.writeFileSync(confPath, text);
-        const checked = spawnSync(nginxBin ?? "nginx", ["-t", "-p", `${dir}/`, "-c", confPath, "-e", path.join(dir, "error.log")], {
-          encoding: "utf8",
-        });
-        assert.equal(checked.status, 0, `${checked.stdout}${checked.stderr}`);
-        assert.match(`${checked.stdout}${checked.stderr}`, /syntax is ok/);
-        assert.match(`${checked.stdout}${checked.stderr}`, /test is successful/);
-      } finally {
-        fs.rmSync(dir, { recursive: true, force: true });
-      }
-    },
-  );
+  void test(`nginx -t accepts the ${mode} render`, { skip: nginxSkipReason(nginxBin, needs) }, () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "local-edge-core-nginx-"));
+    try {
+      const certPath = path.join(dir, "wildcard.crt");
+      const keyPath = path.join(dir, "wildcard.key");
+      const made = spawnSync(
+        opensslBin ?? "openssl",
+        ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=example.test", "-keyout", keyPath, "-out", certPath],
+        { encoding: "utf8" },
+      );
+      assert.equal(made.status, 0, "throwaway certificate");
+      const confPath = path.join(dir, "nginx.conf");
+      const text = LocalEdgeCore_renderExposureHostnamesNginxConfig(
+        manifestFor({
+          ...hostnames,
+          tls: { mode: "provided", certPath, keyPath },
+          nginx: {
+            confPath,
+            pidPath: path.join(dir, "nginx.pid"),
+            errorLogPath: path.join(dir, "error.log"),
+            accessLogPath: path.join(dir, "access.log"),
+            tempDir: path.join(dir, "tmp"),
+          },
+        }),
+      );
+      fs.mkdirSync(path.join(dir, "tmp"));
+      fs.writeFileSync(confPath, text);
+      const checked = spawnSync(nginxBin ?? "nginx", ["-t", "-p", `${dir}/`, "-c", confPath, "-e", path.join(dir, "error.log")], {
+        encoding: "utf8",
+      });
+      assert.equal(checked.status, 0, `${checked.stdout}${checked.stderr}`);
+      assert.match(`${checked.stdout}${checked.stderr}`, /syntax is ok/);
+      assert.match(`${checked.stdout}${checked.stderr}`, /test is successful/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 }

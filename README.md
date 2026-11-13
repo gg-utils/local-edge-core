@@ -131,7 +131,18 @@ port outside `protectedPorts`.
 - **Access log (always).** The http `access_log` uses a named `log_format local_edge` with no
   address and no query string: `$time_iso8601 $host $request_method $uri $server_protocol $status
   $body_bytes_sent $request_time`. nginx's own `error_log` can still name client addresses when it
-  reports an error.
+  reports an error, see the next item.
+- **Error log level (`nginx.errorLogLevel`).** One of nginx's levels: `debug`, `info`, `notice`,
+  `warn`, `error`, `crit`, `alert`, `emerg`; anything else is a validation problem that names the
+  field and the length, never the value. Default: `warn` when `clientAddress` is `"connection"`,
+  `crit` when it is `"proxy-protocol"`. At `warn`, an error line carries `client:` and the request
+  line with its query string (`request: "GET /x?a=b ..."`, `upstream: ".../x?a=b"`); with PROXY
+  protocol live that `client:` is a real client IP. `crit` drops those lines, and with them what an
+  operator reads when something breaks: the causes behind a 502 or 504 (upstream connection refused
+  or timed out), PROXY protocol `broken header` lines (a front and nginx that disagree about the
+  protocol), client-closed-connection lines and TLS handshake errors. Set `errorLogLevel: "warn"`
+  (or `"error"`) in `proxy-protocol` mode to get them back, and treat the log file as holding
+  addresses and query strings.
 - **`clientAddress: "proxy-protocol"`.** The default, `"connection"`, uses the address of the TCP
   peer. With a front that sends the PROXY protocol (for example a tailnet TCP forward with PROXY
   protocol on), set `clientAddress: "proxy-protocol"`, keep `stream`, and give `proxyProtocol:
@@ -150,6 +161,17 @@ port outside `protectedPorts`.
   validation reports them by name. The new http listener maps `X-Forwarded-Host` and
   `X-Forwarded-Port` like the listener the first stream route points at, unless `httpClientPort`
   says otherwise.
+
+  This mode needs an nginx built with the `stream`, `stream_ssl_preread` and `stream_realip`
+  modules (check `nginx -V` for `--with-stream`, `--with-stream_ssl_preread_module` and
+  `--with-stream_realip_module`); without them `nginx -t` rejects the config with `unknown
+  directive`. The `connection` render with a `stream` needs `stream` and `stream_ssl_preread`.
+
+  **Trust.** The listeners are loopback-only, but any local process that can reach them can send
+  its own PROXY header, and the router then takes the address in that header as the client address.
+  The client address in `proxy-protocol` mode is only as trusted as the local machine: every
+  process and user that can open a connection to `127.0.0.1` on `streamPort`, `httpPort` and
+  `relayPort`. Use the mode only on a machine where that set is trusted.
 - An app may set its own `hostnameTemplate` to sit under another label; list that wildcard in
   `extraWildcardTemplates` and the certificate and DNS steps cover it too.
 - An app may set an exact `host` instead (it must still sit under a configured wildcard), and
