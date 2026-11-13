@@ -1,6 +1,6 @@
 {
   "name": "@gg-utils/local-edge-core",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Agnostic local-edge core primitives for local HTTPS routing, manifests, and hostnames.",
   "license": "MIT",
   "type": "module",

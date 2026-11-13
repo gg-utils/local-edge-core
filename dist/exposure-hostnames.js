@@ -368,6 +368,7 @@ export function LocalEdgeCore_validateExposureHostnames(manifest) {
     const wildcardParents = new Set(wildcards.map((wildcard) => wildcard.replace(/^\*\./, "")));
     problems.push(...LocalEdgeCore_listenerProblems(manifest, settings));
     problems.push(...LocalEdgeCore_streamProblems(manifest, settings));
+    problems.push(...LocalEdgeCore_proxyProtocolProblems(manifest, settings));
     const seen = new Map();
     for (const [appIndex, app] of manifest.apps.entries()) {
         if (!app.enabled) {
@@ -727,6 +728,83 @@ function LocalEdgeCore_streamProblems(manifest, settings) {
     }
     return problems;
 }
+/** The two accepted `clientAddress` modes. */
+const LOCAL_EDGE_CORE_CLIENT_ADDRESS_MODES = ["connection", "proxy-protocol"];
+/** The `proxy-protocol` mode of a validated config, or null when the config uses the connection address. */
+function LocalEdgeCore_proxyProtocolMode(settings) {
+    const { stream, proxyProtocol } = settings;
+    if (settings.clientAddress !== "proxy-protocol" || stream === undefined || proxyProtocol === undefined) {
+        return null;
+    }
+    const firstRoute = stream.routes[0] === undefined ? null : LocalEdgeCore_parseUpstream(stream.routes[0].upstream);
+    const target = LocalEdgeCore_routerListeners(settings).find((listener) => listener.port === firstRoute?.port);
+    return {
+        stream,
+        ports: proxyProtocol,
+        clientPort: proxyProtocol.httpClientPort ?? target?.clientPort ?? LocalEdgeCore_clientEdgePort(settings),
+    };
+}
+/**
+ * Checks `clientAddress` and, for `proxy-protocol`, the stream router it builds on and the three
+ * extra loopback ports (valid, unprotected, distinct from each other and from every other port).
+ */
+function LocalEdgeCore_proxyProtocolProblems(manifest, settings) {
+    const { clientAddress, proxyProtocol } = settings;
+    if (clientAddress === undefined || clientAddress === "connection") {
+        return proxyProtocol === undefined ? [] : ["hostnames.proxyProtocol is only used when clientAddress is proxy-protocol"];
+    }
+    if (!LOCAL_EDGE_CORE_CLIENT_ADDRESS_MODES.includes(clientAddress)) {
+        return [`hostnames.clientAddress (${LocalEdgeCore_messageInputSize(clientAddress)}) must be connection or proxy-protocol`];
+    }
+    const problems = [];
+    const { stream } = settings;
+    if (stream === undefined) {
+        problems.push("hostnames.clientAddress proxy-protocol needs hostnames.stream");
+    }
+    if (proxyProtocol === undefined) {
+        problems.push("hostnames.clientAddress proxy-protocol needs hostnames.proxyProtocol ports");
+        return problems;
+    }
+    const taken = new Map();
+    for (const listener of LocalEdgeCore_routerListeners(settings)) {
+        taken.set(listener.port, "an HTTP listener");
+    }
+    for (const port of LocalEdgeCore_appPorts(manifest)) {
+        taken.set(port, "an app port");
+    }
+    if (stream !== undefined) {
+        taken.set(stream.port, "the stream router port");
+    }
+    for (const field of ["streamPort", "httpPort", "relayPort"]) {
+        const port = proxyProtocol[field];
+        const label = `hostnames.proxyProtocol.${field} ${LocalEdgeCore_messageNumber(port)}`;
+        if (!LocalEdgeCore_exposureIsPort(port)) {
+            problems.push(`${label} is not a valid TCP port`);
+            continue;
+        }
+        if (manifest.protectedPorts.includes(port)) {
+            problems.push(`${label} is protected`);
+        }
+        const owner = taken.get(port);
+        if (owner !== undefined) {
+            problems.push(`${label} is already used as ${owner}`);
+        }
+        taken.set(port, `hostnames.proxyProtocol.${field}`);
+    }
+    if (proxyProtocol.httpClientPort !== undefined && !LocalEdgeCore_exposureIsPort(proxyProtocol.httpClientPort)) {
+        problems.push(`hostnames.proxyProtocol.httpClientPort ${LocalEdgeCore_messageNumber(proxyProtocol.httpClientPort)} is not a valid TCP port`);
+    }
+    if (stream !== undefined) {
+        const listenerPorts = new Set(LocalEdgeCore_routerListeners(settings).map((listener) => listener.port));
+        for (const [index, route] of stream.routes.entries()) {
+            const upstream = LocalEdgeCore_parseUpstream(route.upstream);
+            if (upstream === null || upstream.host !== settings.routerHost || !listenerPorts.has(upstream.port)) {
+                problems.push(`hostnames.stream route ${String(index + 1)} must point at a router listener when clientAddress is proxy-protocol, because the relay serves only the default upstream`);
+            }
+        }
+    }
+    return problems;
+}
 /** Renders the `listen` line for one listener. */
 function LocalEdgeCore_renderListen(settings, listener, suffix) {
     return `listen ${settings.routerHost}:${String(listener.port)}${listener.ssl ? " ssl" : ""}${suffix};`;
@@ -759,6 +837,32 @@ function LocalEdgeCore_forwardedValues(listeners) {
         ],
     };
 }
+/**
+ * Every HTTP listener that proxies requests: the configured ones plus, in `proxy-protocol` mode,
+ * the extra PROXY protocol listener (with the client port the forwarded host and port maps use).
+ */
+function LocalEdgeCore_httpListeners(settings) {
+    const mode = LocalEdgeCore_proxyProtocolMode(settings);
+    const listeners = LocalEdgeCore_routerListeners(settings);
+    return mode === null ? listeners : [...listeners, { port: mode.ports.httpPort, ssl: true, clientPort: mode.clientPort }];
+}
+/** The `listen` line of the extra PROXY protocol HTTP listener, as a list of zero or one entries. */
+function LocalEdgeCore_proxyProtocolHttpListens(settings, suffix) {
+    const mode = LocalEdgeCore_proxyProtocolMode(settings);
+    return mode === null ? [] : [`    listen ${settings.routerHost}:${String(mode.ports.httpPort)} ssl proxy_protocol${suffix};`];
+}
+/** Plan detail lines for the extra PROXY protocol listeners; none in `connection` mode. */
+function LocalEdgeCore_proxyProtocolPlanLines(settings) {
+    const mode = LocalEdgeCore_proxyProtocolMode(settings);
+    if (mode === null) {
+        return [];
+    }
+    const { ports } = mode;
+    const host = settings.routerHost;
+    return [
+        `proxy protocol: stream ${host}:${String(ports.streamPort)} (app names -> ${host}:${String(ports.httpPort)} with PROXY protocol, others -> relay ${host}:${String(ports.relayPort)} -> default upstream, plain)`,
+    ];
+}
 /** Renders the `stream` block, or nothing when no stream router is configured. */
 function LocalEdgeCore_renderStreamBlock(settings) {
     const { stream } = settings;
@@ -777,9 +881,49 @@ function LocalEdgeCore_renderStreamBlock(settings) {
         "    proxy_pass $local_edge_stream_upstream;",
         `    proxy_connect_timeout ${stream.connectTimeout ?? "5s"};`,
         "  }",
+        ...LocalEdgeCore_renderProxyProtocolStreamServers(settings),
         "}",
     ];
 }
+/**
+ * The extra stream servers of `proxy-protocol` mode, appended after the existing stream server
+ * (which is left as it is): a PROXY protocol listener with the same SNI routes that sends the
+ * client address on to its upstreams, and a relay that reads the header and forwards plain to the
+ * default upstream (which does not accept the PROXY protocol).
+ */
+function LocalEdgeCore_renderProxyProtocolStreamServers(settings) {
+    const mode = LocalEdgeCore_proxyProtocolMode(settings);
+    if (mode === null) {
+        return [];
+    }
+    const { stream, ports } = mode;
+    const timeout = `    proxy_connect_timeout ${stream.connectTimeout ?? "5s"};`;
+    return [
+        "  map $ssl_preread_server_name $local_edge_stream_proxy_protocol_upstream {",
+        ...stream.routes.map((route) => `    ${route.serverName} ${settings.routerHost}:${String(ports.httpPort)};`),
+        `    default ${settings.routerHost}:${String(ports.relayPort)};`,
+        "  }",
+        "  server {",
+        `    listen ${settings.routerHost}:${String(ports.streamPort)} proxy_protocol;`,
+        `    set_real_ip_from ${LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST};`,
+        "    ssl_preread on;",
+        "    proxy_pass $local_edge_stream_proxy_protocol_upstream;",
+        "    proxy_protocol on;",
+        timeout,
+        "  }",
+        "  server {",
+        `    listen ${settings.routerHost}:${String(ports.relayPort)} proxy_protocol;`,
+        `    proxy_pass ${stream.defaultUpstream};`,
+        timeout,
+        "  }",
+    ];
+}
+/**
+ * `log_format` of the access log. It has no client address, no query string (`$uri`, not
+ * `$request`) and no header values: time, host, method, path, protocol, status, bytes sent and
+ * request time.
+ */
+const LOCAL_EDGE_CORE_ACCESS_LOG_FORMAT = "$time_iso8601 $host $request_method $uri $server_protocol $status $body_bytes_sent $request_time";
 /** Renders one proxy `location` with the shared headers. */
 function LocalEdgeCore_renderHostLocation(options) {
     const buffering = options.proxy.buffering === false ? "\n      proxy_buffering off;" : "";
@@ -787,7 +931,12 @@ function LocalEdgeCore_renderHostLocation(options) {
       proxy_pass http://${LOCAL_EDGE_CORE_EXPOSURE_LOOPBACK_HOST}:${String(options.localPort)}${options.upstreamPath};
       proxy_http_version 1.1;
       proxy_set_header Host ${options.proxy.upstreamHost === undefined ? "$host" : LocalEdgeCore_nginxValueArgument(`location ${options.path} upstreamHost`, "upstreamHost", options.proxy.upstreamHost)};
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-For $local_edge_client_addr;
+      proxy_set_header X-Real-IP $local_edge_client_addr;
+      proxy_set_header X-Real-Port $local_edge_client_port;
+      proxy_set_header Forwarded "";
+      proxy_set_header X-Client-IP "";
+      proxy_set_header True-Client-IP "";
       proxy_set_header X-Forwarded-Proto https;
       proxy_set_header X-Forwarded-Host ${options.forwardedHost};
       proxy_set_header X-Forwarded-Port ${options.forwardedPort};
@@ -799,11 +948,13 @@ function LocalEdgeCore_renderHostLocation(options) {
 /**
  * Renders the server block for one host: one `listen` per router listener, `server_name` set to
  * the host, `/` to the app's loopback port plus any extra path locations, each proxied with
- * HTTP/1.1, the original Host, `X-Forwarded-Proto https`, `X-Forwarded-Host` and
+ * HTTP/1.1, the original Host, `X-Forwarded-For` and `X-Real-IP` set (never appended) to the
+ * client address, `X-Real-Port` to the client source port, client-sent `Forwarded`,
+ * `X-Client-IP` and `True-Client-IP` cleared, `X-Forwarded-Proto https`, `X-Forwarded-Host` and
  * `X-Forwarded-Port` with the client-facing port, and Upgrade/Connection passed for websockets.
  */
 function LocalEdgeCore_renderHostServerBlock(settings, entry) {
-    const listeners = LocalEdgeCore_routerListeners(settings);
+    const listeners = LocalEdgeCore_httpListeners(settings);
     const { host: forwardedHost, port: forwardedPort } = LocalEdgeCore_forwardedValues(listeners);
     const locations = [
         LocalEdgeCore_renderHostLocation({
@@ -823,7 +974,10 @@ function LocalEdgeCore_renderHostServerBlock(settings, entry) {
             proxy: location,
         })),
     ];
-    const listens = listeners.map((listener) => `    ${LocalEdgeCore_renderListen(settings, listener, "")}`);
+    const listens = [
+        ...LocalEdgeCore_routerListeners(settings).map((listener) => `    ${LocalEdgeCore_renderListen(settings, listener, "")}`),
+        ...LocalEdgeCore_proxyProtocolHttpListens(settings, ""),
+    ];
     return `  server {
 ${listens.join("\n")}
     http2 on;
@@ -861,7 +1015,7 @@ function LocalEdgeCore_requireValidHostnames(manifest) {
 export function LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest) {
     const settings = LocalEdgeCore_requireValidHostnames(manifest);
     const { nginx } = settings;
-    const listeners = LocalEdgeCore_routerListeners(settings);
+    const listeners = LocalEdgeCore_httpListeners(settings);
     const arg = LocalEdgeCore_nginxPathArgument;
     const temp = (directive, name) => `  ${directive}_temp_path ${arg("hostnames.nginx.tempDir", path.join(nginx.tempDir, name))};`;
     return [
@@ -874,7 +1028,8 @@ export function LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest) {
         "http {",
         ...(nginx.mimeTypesPath === undefined ? [] : [`  include ${arg("hostnames.nginx.mimeTypesPath", nginx.mimeTypesPath)};`]),
         "  default_type application/octet-stream;",
-        `  access_log ${arg("hostnames.nginx.accessLogPath", nginx.accessLogPath)};`,
+        `  log_format local_edge '${LOCAL_EDGE_CORE_ACCESS_LOG_FORMAT}';`,
+        `  access_log ${arg("hostnames.nginx.accessLogPath", nginx.accessLogPath)} local_edge;`,
         temp("client_body", "body"),
         temp("proxy", "proxy"),
         temp("fastcgi", "fcgi"),
@@ -885,8 +1040,13 @@ export function LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest) {
         `  ssl_certificate_key ${arg("hostnames.tls.keyPath", settings.tls.keyPath)};`,
         "  ssl_protocols TLSv1.2 TLSv1.3;",
         "  map $http_upgrade $local_edge_connection_upgrade { default upgrade; '' close; }",
+        "  map $proxy_protocol_addr $local_edge_client_addr { \"\" $remote_addr; default $proxy_protocol_addr; }",
+        "  map $proxy_protocol_port $local_edge_client_port { \"\" $remote_port; default $proxy_protocol_port; }",
         ...LocalEdgeCore_forwardedValues(listeners).maps,
-        `  server { ${listeners.map((listener) => LocalEdgeCore_renderListen(settings, listener, " default_server")).join(" ")} server_name _; return 421; }`,
+        `  server { ${[
+            ...LocalEdgeCore_routerListeners(settings).map((listener) => LocalEdgeCore_renderListen(settings, listener, " default_server")),
+            ...LocalEdgeCore_proxyProtocolHttpListens(settings, " default_server").map((line) => line.trim()),
+        ].join(" ")} server_name _; return 421; }`,
         ...LocalEdgeCore_listExposureHostnames(manifest, settings).map((entry) => LocalEdgeCore_renderHostServerBlock(settings, entry)),
         "}",
         "",
@@ -1093,6 +1253,7 @@ export function LocalEdgeCore_planExposureHostnames(manifest, options = {}) {
             detail: [
                 ...stream.routes.map((route) => `${route.serverName} -> ${route.upstream}`),
                 `default -> ${stream.defaultUpstream}`,
+                ...LocalEdgeCore_proxyProtocolPlanLines(settings),
             ].join("\n"),
         });
     }

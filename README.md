@@ -121,6 +121,35 @@ port outside `protectedPorts`.
   sends matching names (for example `LocalEdgeCore_sniZoneSuffixPattern(rootZone)`) to a router
   listener and anything else to a default upstream, without terminating TLS. Pointing a tailnet
   port at it is an owner step the backend never applies.
+- **Client address headers (always).** Every proxied location sets `X-Forwarded-For` and `X-Real-IP`
+  to one value, the client address, and never appends to what the client sent. `X-Real-Port` is the
+  client source port. Client-sent `Forwarded`, `X-Client-IP` and `True-Client-IP` are cleared.
+  `X-Forwarded-Port` still means the port the client reached (the server side). The values come
+  from two http maps, `$local_edge_client_addr` and `$local_edge_client_port`, which use the
+  PROXY protocol address when the listener took one and the connection address otherwise, so both
+  modes share the same header lines. Only add this router behind a front you trust.
+- **Access log (always).** The http `access_log` uses a named `log_format local_edge` with no
+  address and no query string: `$time_iso8601 $host $request_method $uri $server_protocol $status
+  $body_bytes_sent $request_time`. nginx's own `error_log` can still name client addresses when it
+  reports an error.
+- **`clientAddress: "proxy-protocol"`.** The default, `"connection"`, uses the address of the TCP
+  peer. With a front that sends the PROXY protocol (for example a tailnet TCP forward with PROXY
+  protocol on), set `clientAddress: "proxy-protocol"`, keep `stream`, and give `proxyProtocol:
+  { streamPort, httpPort, relayPort }` (optional `httpClientPort`). The render then adds, and leaves
+  every existing listener as it is:
+  - a stream server on `streamPort` with `listen ... proxy_protocol;`, `set_real_ip_from 127.0.0.1;`,
+    `ssl_preread on;` and the same SNI routes, with `proxy_protocol on;` toward its upstreams;
+  - a TLS http listener `listen ... ssl proxy_protocol;` on `httpPort` in every app server block and
+    in the 421 default server, which the SNI routes of that stream server use;
+  - a relay stream server on `relayPort` (`listen ... proxy_protocol;`) that forwards plain to the
+    existing `defaultUpstream`, which does not accept the PROXY protocol.
+
+  Point the front at `streamPort`. In this mode every stream route must point at a router listener
+  (the relay serves only the default upstream). The three ports must be valid, unprotected and
+  distinct from each other and from every router listener, app port and the stream port, or
+  validation reports them by name. The new http listener maps `X-Forwarded-Host` and
+  `X-Forwarded-Port` like the listener the first stream route points at, unless `httpClientPort`
+  says otherwise.
 - An app may set its own `hostnameTemplate` to sit under another label; list that wildcard in
   `extraWildcardTemplates` and the certificate and DNS steps cover it too.
 - An app may set an exact `host` instead (it must still sit under a configured wildcard), and
@@ -208,5 +237,5 @@ The extracted scripts currently expect the source-first workspace toolchain.
 Requires Node `>=22.0.0 <27`. Add this dependency; built JavaScript and declarations are included, with no install build step:
 
 ```json
-"@gg-utils/local-edge-core": "git+https://github.com/gg-utils/local-edge-core.git#v0.4.1"
+"@gg-utils/local-edge-core": "git+https://github.com/gg-utils/local-edge-core.git#v0.5.0"
 ```
