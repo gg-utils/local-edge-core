@@ -121,7 +121,7 @@ void test("renders a whole nginx.conf with pid, logs, temp paths and the certifi
   const text = LocalEdgeCore_renderExposureHostnamesNginxConfig(manifest());
   assert.match(text, /^pid \/le\/nginx\/nginx\.pid;$/m);
   assert.match(text, /^error_log \/le\/logs\/nginx-error\.log warn;$/m);
-  assert.match(text, /access_log \/le\/logs\/nginx-access\.log;/);
+  assert.match(text, /access_log \/le\/logs\/nginx-access\.log local_edge;/);
   assert.match(text, /client_body_temp_path \/le\/nginx\/tmp\/body;/);
   assert.match(text, /include \/opt\/nginx\/mime\.types;/);
   assert.match(text, /^ {2}ssl_certificate \/le\/tls\/wildcard\.crt;$/m);

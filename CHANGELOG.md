@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0 - 2026-11-12
+
+### Breaking
+
+- **Client address headers changed in every `hostnames` proxied location.** `X-Forwarded-For` is no longer `$proxy_add_x_forwarded_for`; it is set to the client address only, so a value the client sent is dropped instead of kept in front. A downstream app that read the first entry of a longer list now gets exactly one entry.
+- **The http access log format changed.** `access_log` now names the format `local_edge` (`$time_iso8601 $host $request_method $uri $server_protocol $status $body_bytes_sent $request_time`) instead of the default combined format, so the log no longer holds the client address, the query string, the referer or the user agent. A parser of the old combined lines must be updated.
+- The rendered `nginx.conf` has two more http `map` blocks and a `log_format` line, so a supervisor that compares the file will see a one-time difference.
+
+### Added
+
+- **`X-Real-IP` and `X-Real-Port`** in every proxied location: the client address and the client source port. Client-sent `Forwarded`, `X-Client-IP` and `True-Client-IP` are cleared. `X-Forwarded-Port` keeps meaning the server port. The values come from the maps `$local_edge_client_addr` and `$local_edge_client_port` (the PROXY protocol value when present, else `$remote_addr` and `$remote_port`).
+- **`clientAddress: "connection" | "proxy-protocol"`** on the hostnames settings (default `"connection"`), with `proxyProtocol: { streamPort, httpPort, relayPort, httpClientPort? }` (type `LocalEdgeCore_ExposureProxyProtocolPorts`). In `proxy-protocol` mode the render adds a PROXY protocol stream listener with `set_real_ip_from 127.0.0.1` and the same SNI routes, a TLS http listener with `proxy_protocol` in every app server block and the 421 default, and a relay stream listener that forwards plain to the default upstream. Existing listeners and the existing stream server are unchanged. The `router:stream` plan step lists the new listeners.
+- **`nginx.errorLogLevel`** (one of nginx's levels: `debug`, `info`, `notice`, `warn`, `error`, `crit`, `alert`, `emerg`). Default: `warn` when `clientAddress` is `"connection"` (the render is unchanged), `crit` when it is `"proxy-protocol"`, because at `warn` an error line holds `client:` (a real IP with PROXY protocol) and the request line with its query string. `crit` drops the causes behind 502 and 504, PROXY protocol `broken header` lines, client-closed and TLS handshake errors; set the level explicitly to keep them. A bad value is reported by length only.
+- Validation for the new option: it needs `stream` and the three ports, the ports must be valid, unprotected and distinct from every other port, every stream route must point at a router listener, and a bad value is reported by length only.
+
 ## 0.4.1 - 2026-11-12
 
 ### Changed

@@ -82,6 +82,28 @@ export type LocalEdgeCore_ExposureStreamRoute = {
     upstream: string;
 };
 /**
+ * Extra loopback listeners that let a trusted front pass the client address with the PROXY
+ * protocol (for example a tailnet TCP forward with PROXY protocol turned on). Used when
+ * `clientAddress` is `"proxy-protocol"`. Every port must be a valid, unprotected port that no
+ * other listener, stream or app uses, and the three must differ.
+ */
+export type LocalEdgeCore_ExposureProxyProtocolPorts = {
+    /** Loopback port of the extra stream listener that reads the PROXY header, then the SNI name. */
+    streamPort: number;
+    /** Loopback port of the extra TLS HTTP listener (with `proxy_protocol`) the app names go to. */
+    httpPort: number;
+    /**
+     * Loopback port of a small stream relay for names that go to the default upstream. That
+     * upstream does not accept the PROXY protocol, so the relay reads the header and forwards plain.
+     */
+    relayPort: number;
+    /**
+     * Port clients see for requests on the extra HTTP listener, written into `X-Forwarded-Host` and
+     * `X-Forwarded-Port`. Default: the client port of the listener the first stream route points at.
+     */
+    httpClientPort?: number | undefined;
+};
+/**
  * A raw-TCP listener that reads the SNI name without terminating TLS (`ssl_preread`) and passes the
  * stream on: matching names to the router's own listeners, anything else to a default upstream.
  */
@@ -151,6 +173,14 @@ export type LocalEdgeCore_ExposureHostnamesConfig = {
     listeners?: readonly LocalEdgeCore_ExposureRouterListener[] | undefined;
     /** Optional SNI stream router in front of the listeners. */
     stream?: LocalEdgeCore_ExposureStreamRouter | undefined;
+    /**
+     * Where the client address comes from. `"connection"` (default): the TCP peer of the listener.
+     * `"proxy-protocol"`: the render also adds listeners that read it from a PROXY protocol header
+     * (needs `stream` and `proxyProtocol`); every existing listener stays as it is.
+     */
+    clientAddress?: "connection" | "proxy-protocol" | undefined;
+    /** Ports of the extra PROXY protocol listeners. Required when `clientAddress` is `"proxy-protocol"`. */
+    proxyProtocol?: LocalEdgeCore_ExposureProxyProtocolPorts | undefined;
     /** Certificate and key the router uses; kept in a 0700 folder outside any git checkout. */
     tls: {
         mode: "provided";
@@ -169,6 +199,13 @@ export type LocalEdgeCore_ExposureHostnamesConfig = {
         mimeTypesPath?: string | undefined;
         /** `worker_connections`. Default 512. */
         workerConnections?: number | undefined;
+        /**
+         * nginx `error_log` level: one of `debug`, `info`, `notice`, `warn`, `error`, `crit`, `alert`,
+         * `emerg`. Default: `warn` when `clientAddress` is `"connection"` (or unset), `crit` when it is
+         * `"proxy-protocol"`, because at `warn` an error line holds the client address and the request
+         * line with its query string.
+         */
+        errorLogLevel?: string | undefined;
     };
     /** Plan-only ACME DNS-01 issuing step. Omit to leave issuing out of the plan. */
     acme?: {
